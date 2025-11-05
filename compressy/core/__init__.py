@@ -1,0 +1,4 @@
+"""
+Core compression functionality.
+"""
+
