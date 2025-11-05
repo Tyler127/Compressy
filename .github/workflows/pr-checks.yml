@@ -1,0 +1,68 @@
+name: PR Checks
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+
+jobs:
+  pr-validation:
+    name: PR Validation
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+    
+    - name: Check PR title format
+      uses: amannn/action-semantic-pull-request@v5
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        types: |
+          feat
+          fix
+          docs
+          style
+          refactor
+          perf
+          test
+          chore
+          ci
+          build
+        requireScope: false
+        subjectPattern: ^(?![A-Z]).+$
+        subjectPatternError: |
+          The subject "{subject}" found in the pull request title "{title}"
+          didn't match the configured pattern. Please ensure that the subject
+          doesn't start with an uppercase character.
+    
+    - name: Check for large files
+      run: |
+        MAX_SIZE=5242880  # 5MB
+        large_files=$(find . -type f -size +${MAX_SIZE}c ! -path "./.git/*" ! -path "./.github/*" ! -path "./htmlcov/*" ! -path "./.pytest_cache/*")
+        if [ -n "$large_files" ]; then
+          echo "Large files detected:"
+          echo "$large_files"
+          exit 1
+        fi
+    
+    - name: Check for merge conflicts
+      run: |
+        git fetch origin ${{ github.base_ref }}
+        git merge --no-commit --no-ff origin/${{ github.base_ref }} || {
+          echo "Merge conflicts detected!"
+          exit 1
+        }
+        git merge --abort
+    
+    - name: Validate commit messages
+      run: |
+        git log --pretty=format:"%s" origin/${{ github.base_ref }}..HEAD | while read commit_msg; do
+          if ! echo "$commit_msg" | grep -qE "^(feat|fix|docs|style|refactor|perf|test|chore|ci|build)(\(.+\))?: .+"; then
+            echo "Invalid commit message: $commit_msg"
+            echo "Commit messages should follow: type(scope): description"
+            exit 1
+          fi
+        done || echo "No commits to validate"
+

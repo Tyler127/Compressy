@@ -1,0 +1,70 @@
+name: Linting and Code Quality
+
+on:
+  push:
+    branches: [ main, master, develop ]
+  pull_request:
+    branches: [ main, master, develop ]
+  workflow_dispatch:
+
+jobs:
+  lint:
+    name: Code Quality Checks
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: "3.11"
+    
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install flake8 black isort mypy pylint
+        pip install -r requirements-dev.txt
+    
+    - name: Check code formatting with Black
+      run: |
+        black --check --diff compressy tests
+    
+    - name: Check import sorting with isort
+      run: |
+        isort --check-only --diff compressy tests
+    
+    - name: Lint with flake8
+      run: |
+        flake8 compressy tests --count --select=E9,F63,F7,F82 --show-source --statistics
+        flake8 compressy tests --count --exit-zero --max-complexity=10 --max-line-length=120 --statistics
+    
+    - name: Lint with pylint
+      run: |
+        pylint compressy --disable=all --enable=errors,unused-import,undefined-variable --max-line-length=120 || true
+    
+    - name: Type check with mypy
+      run: |
+        mypy compressy --ignore-missing-imports --no-strict-optional || true
+
+  format-check:
+    name: Format Check
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: "3.11"
+    
+    - name: Install Black
+      run: |
+        python -m pip install --upgrade pip
+        pip install black
+    
+    - name: Check formatting
+      run: |
+        black --check compressy tests
+
