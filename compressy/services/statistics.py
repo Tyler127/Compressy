@@ -5,6 +5,7 @@ from typing import Dict, List, Optional
 
 from compressy.utils.format import format_size
 
+
 # ============================================================================
 # Statistics Tracker
 # ============================================================================

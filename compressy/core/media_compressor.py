@@ -13,6 +13,7 @@ from compressy.services.statistics import StatisticsTracker
 from compressy.utils.file_processor import FileProcessor
 from compressy.utils.format import format_size
 
+
 # ============================================================================
 # Media Compressor
 # ============================================================================

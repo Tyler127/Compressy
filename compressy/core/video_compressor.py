@@ -4,6 +4,7 @@ from typing import List
 from compressy.core.config import CompressionConfig
 from compressy.core.ffmpeg_executor import FFmpegExecutor
 
+
 # ============================================================================
 # Video Compressor
 # ============================================================================

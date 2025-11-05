@@ -6,6 +6,7 @@ from typing import Dict, List, Optional
 
 from compressy.utils.format import format_size
 
+
 # ============================================================================
 # Report Generator
 # ============================================================================
