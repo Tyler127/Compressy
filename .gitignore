@@ -1,4 +1,4 @@
-# Ignore reports directory
+# Compressy generated files
 /reports/
 /statistics/
 
@@ -40,3 +40,6 @@ cython_debug/
 
 # Pytest files
 coverage.xml
+
+# Cursor files
+.cursor/
