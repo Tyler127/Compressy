@@ -188,7 +188,19 @@ def main():
         print(f"Processed: {stats['processed']} files")
         print(f"Skipped: {stats['skipped']} files")
         print(f"Errors: {stats['errors']} files")
-        print(f"Total space saved: {format_size(stats['space_saved'])}")
+        
+        # Calculate and display size reduction
+        original_size = stats.get('total_original_size', 0)
+        compressed_size = stats.get('total_compressed_size', 0)
+        space_saved = stats.get('space_saved', 0)
+        
+        if original_size > 0:
+            reduction_percent = (space_saved / original_size) * 100
+            print(f"Size: {format_size(original_size)} → {format_size(compressed_size)} ({reduction_percent:.1f}% reduction)")
+            print(f"Space saved: {format_size(space_saved)}")
+        else:
+            print(f"Space saved: {format_size(space_saved)}")
+        
         if args.recursive and len(report_paths) > 1:
             print(f"Reports generated: {len(report_paths)} reports in reports/{compressed_folder_name}/")
         else:
