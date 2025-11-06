@@ -72,7 +72,7 @@ pytest -m "not slow"
 Tests are automatically run on:
 - Push to main/master/develop branches
 - Pull requests to main/master/develop branches
-- Multiple Python versions (3.8, 3.9, 3.10, 3.11)
+- Python 3.14
 - Multiple operating systems (Ubuntu, Windows, macOS)
 
 ## Writing New Tests
