@@ -50,21 +50,39 @@ class VideoCompressor:
         Returns:
             List of FFmpeg arguments
         """
-        return [
-            "-i",
-            str(in_path),
+        args = ["-i", str(in_path)]
+        
+        # Add video filter for resolution scaling if specified
+        if self.config.video_resolution:
+            from compressy.utils.format import parse_resolution
+            width, height = parse_resolution(self.config.video_resolution)
+            # Use -2 instead of -1 to ensure dimensions are divisible by 2 (required by some codecs)
+            args.extend(["-vf", f"scale={width}:{height}"])
+        
+        # Add video codec settings
+        args.extend([
             "-vcodec",
             "libx264",
             "-crf",
             str(self.config.video_crf),
             "-preset",
             self.config.video_preset,
+        ])
+        
+        # Add audio codec settings
+        args.extend([
             "-acodec",
             "aac",
             "-b:a",
             "128k",
+        ])
+        
+        # Preserve metadata and allow overwrite
+        args.extend([
             "-map_metadata",
             "0",
             "-y",  # Overwrite output file if it exists
             str(out_path),
-        ]
+        ])
+        
+        return args

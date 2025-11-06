@@ -73,7 +73,11 @@ class MediaCompressor:
             return result
 
         # Setup compressed folder
-        compressed_folder = self.config.source_folder / "compressed"
+        if self.config.output_dir:
+            compressed_folder = self.config.output_dir
+        else:
+            compressed_folder = self.config.source_folder / "compressed"
+        
         if not self.config.overwrite:
             compressed_folder.mkdir(parents=True, exist_ok=True)
 
@@ -93,19 +97,43 @@ class MediaCompressor:
         return self.stats.get_stats()
 
     def _collect_files(self) -> List[Path]:
-        """Collect files to process based on recursive setting."""
+        """Collect files to process based on recursive setting and size filters."""
         if self.config.recursive:
-            return [
+            files = [
                 f
                 for f in self.config.source_folder.rglob("*")
                 if f.suffix.lower() in self.video_exts + self.image_exts and f.is_file()
             ]
         else:
-            return [
+            files = [
                 f
                 for f in self.config.source_folder.iterdir()
                 if f.suffix.lower() in self.video_exts + self.image_exts and f.is_file()
             ]
+        
+        # Apply size filters if specified
+        if self.config.min_size is not None or self.config.max_size is not None:
+            filtered_files = []
+            for f in files:
+                try:
+                    file_size = f.stat().st_size
+                    
+                    # Check min_size
+                    if self.config.min_size is not None and file_size < self.config.min_size:
+                        continue
+                    
+                    # Check max_size
+                    if self.config.max_size is not None and file_size > self.config.max_size:
+                        continue
+                    
+                    filtered_files.append(f)
+                except (OSError, FileNotFoundError):
+                    # Skip files that can't be accessed
+                    continue
+            
+            return filtered_files
+        
+        return files
 
     def _get_folder_key(self, file_path: Path) -> str:
         """Get folder key for recursive mode statistics."""
