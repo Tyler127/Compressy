@@ -1,4 +1,4 @@
-import csv
+import json
 import re
 from datetime import datetime
 from pathlib import Path
@@ -13,7 +13,7 @@ from compressy.utils.format import format_size
 
 
 class ReportGenerator:
-    """Generates CSV reports with compression statistics."""
+    """Generates JSON reports with compression statistics."""
 
     def __init__(self, output_dir: Path):
         """
@@ -30,9 +30,10 @@ class ReportGenerator:
         compressed_folder_name: str,
         recursive: bool = False,
         cmd_args: Optional[Dict] = None,
+        run_uuid: Optional[str] = None,
     ) -> List[Path]:
         """
-        Generate CSV report(s) with compression statistics.
+        Generate JSON report(s) with compression statistics.
 
         If recursive=True and folder_stats exist, generates one report per subfolder.
         Otherwise, generates a single report.
@@ -42,6 +43,7 @@ class ReportGenerator:
             compressed_folder_name: Name of the compressed folder
             recursive: Whether to generate per-folder reports
             cmd_args: Command line arguments for report
+            run_uuid: Unique identifier for this compression run
 
         Returns:
             List of report file paths.
@@ -74,15 +76,16 @@ class ReportGenerator:
                 if not folder_safe_name or folder_safe_name == ".":
                     folder_safe_name = "root"
 
-                report_path = main_reports_dir / f"{folder_safe_name}_report.csv"
+                report_path = main_reports_dir / f"{folder_safe_name}_report.json"
                 folder_display_name = folder_key if folder_key != "." else "root"
                 unique_path = self._get_unique_path(report_path)
-                self._write_csv_report(
+                self._write_json_report(
                     unique_path,
                     folder_stat,
                     folder_display_name,
                     compressed_folder_name,
                     cmd_args,
+                    run_uuid,
                 )
                 report_paths.append(unique_path)
                 print(f"✓ Report generated: {unique_path}")
@@ -112,14 +115,15 @@ class ReportGenerator:
                 aggregated_stats["files"].extend(folder_stat["files"])
 
             # Generate aggregated report
-            aggregated_report_path = main_reports_dir / "aggregated_report.csv"
+            aggregated_report_path = main_reports_dir / "aggregated_report.json"
             unique_aggregated_path = self._get_unique_path(aggregated_report_path)
-            self._write_csv_report(
+            self._write_json_report(
                 unique_aggregated_path,
                 aggregated_stats,
                 f"{compressed_folder_name} (All Folders)",
                 None,
                 cmd_args,
+                run_uuid,
             )
             report_paths.append(unique_aggregated_path)
             print(f"✓ Aggregated report generated: {unique_aggregated_path}")
@@ -127,9 +131,9 @@ class ReportGenerator:
         else:
             # Generate single report (non-recursive or no folder_stats)
             reports_dir.mkdir(parents=True, exist_ok=True)
-            report_path = reports_dir / f"{safe_name}_report.csv"
+            report_path = reports_dir / f"{safe_name}_report.json"
             unique_path = self._get_unique_path(report_path)
-            self._write_csv_report(unique_path, stats, compressed_folder_name, None, cmd_args)
+            self._write_json_report(unique_path, stats, compressed_folder_name, None, cmd_args, run_uuid)
             report_paths.append(unique_path)
             print(f"\n✓ Report generated: {unique_path}")
 
@@ -166,119 +170,112 @@ class ReportGenerator:
         new_name = f"{base_name_only} ({counter}){suffix}"
         return parent_dir / new_name
 
-    def _write_csv_report(
+    def _write_json_report(
         self,
         file_path: Path,
         report_stats: Dict,
         report_title: str,
         parent_folder: Optional[str] = None,
         cmd_args: Optional[Dict] = None,
+        run_uuid: Optional[str] = None,
     ) -> None:
-        """Write a CSV report with summary/stats as header comments and CSV data."""
+        """Write a JSON report with structured compression statistics."""
         # Get unique file path if report already exists
         unique_path = self._get_unique_path(file_path)
         if unique_path != file_path:
             print(f"  Report already exists, creating: {unique_path.name}")
 
-        with open(unique_path, "w", newline="", encoding="utf-8") as f:
-            writer = csv.writer(f)
+        # Build metadata section
+        metadata = {
+            "title": f"Compression Report: {report_title}",
+            "generated": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        }
+        if parent_folder:
+            metadata["parent_folder"] = parent_folder
+        if run_uuid:
+            metadata["run_id"] = run_uuid
 
-            # Write summary and statistics as comment rows
-            writer.writerow([f"# Compression Report: {report_title}"])
-            if parent_folder:
-                writer.writerow([f"# Parent Folder: {parent_folder}"])
-            writer.writerow([f"# Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"])
-            writer.writerow([])
+        # Build summary section
+        summary = {
+            "total_files": report_stats["total_files"],
+            "processed": report_stats["processed"],
+            "skipped": report_stats["skipped"],
+            "errors": report_stats["errors"],
+        }
 
-            # Summary section
-            writer.writerow(["# Summary"])
-            writer.writerow(["# Total Files Found", report_stats["total_files"]])
-            writer.writerow(["# Files Processed", report_stats["processed"]])
-            writer.writerow(["# Files Skipped", report_stats["skipped"]])
-            writer.writerow(["# Errors", report_stats["errors"]])
-            writer.writerow([])
+        # Build size statistics section
+        total_compression_ratio = (
+            (report_stats["space_saved"] / report_stats["total_original_size"] * 100)
+            if report_stats["total_original_size"] > 0
+            else 0
+        )
+        size_statistics = {
+            "total_original_size_bytes": report_stats["total_original_size"],
+            "total_compressed_size_bytes": report_stats["total_compressed_size"],
+            "space_saved_bytes": report_stats["space_saved"],
+            "compression_ratio_percent": round(total_compression_ratio, 2),
+        }
 
-            # Size Statistics section
-            total_compression_ratio = (
-                (report_stats["space_saved"] / report_stats["total_original_size"] * 100)
-                if report_stats["total_original_size"] > 0
-                else 0
-            )
-            writer.writerow(["# Size Statistics"])
-            writer.writerow(
-                [
-                    "# Total Original Size",
-                    format_size(report_stats["total_original_size"]),
-                ]
-            )
-            writer.writerow(
-                [
-                    "# Total Compressed Size",
-                    format_size(report_stats["total_compressed_size"]),
-                ]
-            )
-            writer.writerow(["# Total Space Saved", format_size(report_stats["space_saved"])])
-            writer.writerow(["# Overall Compression Ratio", f"{total_compression_ratio:.2f}%"])
+        # Build processing time section
+        total_time = report_stats.get("total_processing_time", 0)
+        time_str = ""
+        if total_time > 0:
+            hours = int(total_time // 3600)
+            minutes = int((total_time % 3600) // 60)
+            seconds = total_time % 60
+            if hours > 0:
+                time_str = f"{hours}h {minutes}m {seconds:.1f}s"
+            elif minutes > 0:
+                time_str = f"{minutes}m {seconds:.1f}s"
+            else:
+                time_str = f"{seconds:.1f}s"
+        
+        processing_time = {
+            "total_seconds": total_time,
+            "formatted": time_str,
+        }
 
-            # Processing Time Statistics
-            total_time = report_stats.get("total_processing_time", 0)
-            if total_time > 0:
-                hours = int(total_time // 3600)
-                minutes = int((total_time % 3600) // 60)
-                seconds = total_time % 60
-                if hours > 0:
-                    time_str = f"{hours}h {minutes}m {seconds:.1f}s"
-                elif minutes > 0:
-                    time_str = f"{minutes}m {seconds:.1f}s"
-                else:
-                    time_str = f"{seconds:.1f}s"
-                writer.writerow(["# Total Processing Time", time_str])
-            writer.writerow([])
+        # Build file details section
+        file_details = []
+        for file_info in report_stats.get("files", []):
+            file_details.append({
+                "name": file_info["name"],
+                "original_size_bytes": file_info["original_size"],
+                "compressed_size_bytes": file_info["compressed_size"],
+                "space_saved_bytes": file_info["space_saved"],
+                "compression_ratio_percent": round(file_info["compression_ratio"], 2),
+                "processing_time_seconds": round(file_info.get("processing_time", 0), 2),
+                "status": file_info["status"],
+            })
 
-            # File Details CSV section
-            if report_stats["files"]:
-                writer.writerow(["# File Details"])
-                writer.writerow(
-                    [
-                        "Filename",
-                        "Original Size",
-                        "Compressed Size",
-                        "Space Saved",
-                        "Compression Ratio (%)",
-                        "Processing Time (s)",
-                        "Status",
-                    ]
-                )
+        # Build arguments section
+        arguments = {}
+        if cmd_args:
+            arguments = {
+                "source_folder": cmd_args.get("source_folder"),
+                "video_crf": cmd_args.get("video_crf"),
+                "video_preset": cmd_args.get("video_preset"),
+                "video_resize": cmd_args.get("video_resize"),
+                "image_quality": cmd_args.get("image_quality"),
+                "image_resize": cmd_args.get("image_resize"),
+                "recursive": cmd_args.get("recursive", False),
+                "overwrite": cmd_args.get("overwrite", False),
+                "keep_if_larger": cmd_args.get("keep_if_larger", False),
+                "progress_interval": cmd_args.get("progress_interval"),
+                "ffmpeg_path": cmd_args.get("ffmpeg_path"),
+                "backup_dir": cmd_args.get("backup_dir"),
+            }
 
-                for file_info in report_stats["files"]:
-                    processing_time = file_info.get("processing_time", 0)
-                    writer.writerow(
-                        [
-                            file_info["name"],
-                            format_size(file_info["original_size"]),
-                            format_size(file_info["compressed_size"]),
-                            format_size(file_info["space_saved"]),
-                            f"{file_info['compression_ratio']:.2f}",
-                            f"{processing_time:.2f}",
-                            file_info["status"],
-                        ]
-                    )
-                writer.writerow([])
+        # Build complete report structure
+        report = {
+            "metadata": metadata,
+            "summary": summary,
+            "size_statistics": size_statistics,
+            "processing_time": processing_time,
+            "file_details": file_details,
+            "arguments": arguments,
+        }
 
-            # Arguments section
-            if cmd_args:
-                writer.writerow(["# Arguments"])
-                writer.writerow(["# Source Folder", cmd_args.get("source_folder", "N/A")])
-                writer.writerow(["# Video CRF", cmd_args.get("video_crf", "N/A")])
-                writer.writerow(["# Video Preset", cmd_args.get("video_preset", "N/A")])
-                writer.writerow(["# Image Quality", cmd_args.get("image_quality", "N/A")])
-                if cmd_args.get("image_resize"):
-                    writer.writerow(["# Image Resize", f"{cmd_args.get('image_resize')}%"])
-                writer.writerow(["# Recursive", cmd_args.get("recursive", "N/A")])
-                writer.writerow(["# Overwrite", cmd_args.get("overwrite", "N/A")])
-                writer.writerow(["# Keep If Larger", cmd_args.get("keep_if_larger", "N/A")])
-                writer.writerow(["# Progress Interval", cmd_args.get("progress_interval", "N/A")])
-                if cmd_args.get("ffmpeg_path"):
-                    writer.writerow(["# FFmpeg Path", cmd_args.get("ffmpeg_path")])
-                if cmd_args.get("backup_dir"):
-                    writer.writerow(["# Backup Directory", cmd_args.get("backup_dir")])
+        # Write JSON report
+        with open(unique_path, "w", encoding="utf-8") as f:
+            json.dump(report, f, indent=2)

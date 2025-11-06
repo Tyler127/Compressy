@@ -2,7 +2,7 @@
 Tests for compressy.services.statistics module.
 """
 
-import csv
+import json
 from pathlib import Path
 from unittest.mock import MagicMock, mock_open, patch
 
@@ -312,8 +312,9 @@ class TestStatisticsManager:
 
         assert manager.statistics_dir == stats_dir
         assert stats_dir.exists()
-        assert manager.cumulative_stats_file == stats_dir / "statistics.csv"
-        assert manager.run_history_file == stats_dir / "run_history.csv"
+        assert manager.cumulative_stats_file == stats_dir / "statistics.json"
+        assert manager.run_history_file == stats_dir / "run_history.json"
+        assert manager.files_log_file == stats_dir / "files.json"
 
     def test_load_cumulative_stats_file_not_exists(self, temp_dir):
         """Test loading cumulative stats when file doesn't exist."""
@@ -329,6 +330,7 @@ class TestStatisticsManager:
         assert stats["total_original_size_bytes"] == 0
         assert stats["total_compressed_size_bytes"] == 0
         assert stats["total_space_saved_bytes"] == 0
+        assert stats["format_stats"] == {}
         assert stats["last_updated"] is None
 
     def test_load_cumulative_stats_file_exists(self, temp_dir):
@@ -336,34 +338,23 @@ class TestStatisticsManager:
         stats_dir = temp_dir / "statistics"
         manager = StatisticsManager(stats_dir)
 
-        # Create CSV file with data (old format for backward compatibility)
-        with open(manager.cumulative_stats_file, "w", newline="", encoding="utf-8") as f:
-            writer = csv.DictWriter(
-                f,
-                fieldnames=[
-                    "total_runs",
-                    "total_files_processed",
-                    "total_files_skipped",
-                    "total_files_errors",
-                    "total_original_size_bytes",
-                    "total_compressed_size_bytes",
-                    "total_space_saved_bytes",
-                    "last_updated",
-                ],
-            )
-            writer.writeheader()
-            writer.writerow(
-                {
-                    "total_runs": "5",
-                    "total_files_processed": "100",
-                    "total_files_skipped": "10",
-                    "total_files_errors": "2",
-                    "total_original_size_bytes": "1000000",
-                    "total_compressed_size_bytes": "500000",
-                    "total_space_saved_bytes": "500000",
-                    "last_updated": "2024-01-01 12:00:00",
-                }
-            )
+        # Create JSON file with data
+        test_data = {
+            "total_runs": 5,
+            "total_files_processed": 100,
+            "total_files_skipped": 10,
+            "total_files_errors": 2,
+            "total_original_size_bytes": 1000000,
+            "total_compressed_size_bytes": 500000,
+            "total_space_saved_bytes": 500000,
+            "total_videos_processed": 50,
+            "total_images_processed": 50,
+            "format_stats": {"mp4": {"count": 10, "original_size": 500000, "compressed_size": 250000, "space_saved": 250000}},
+            "last_updated": "2024-01-01 12:00:00",
+        }
+        
+        with open(manager.cumulative_stats_file, "w", encoding="utf-8") as f:
+            json.dump(test_data, f)
 
         stats = manager.load_cumulative_stats()
 
@@ -375,66 +366,42 @@ class TestStatisticsManager:
         assert stats["total_compressed_size_bytes"] == 500000
         assert stats["total_space_saved_bytes"] == 500000
         assert stats["last_updated"] == "2024-01-01 12:00:00"
-        # Verify backward compatibility - new fields should default to 0
-        assert stats["total_videos_processed"] == 0
-        assert stats["total_images_processed"] == 0
-        assert stats["format_stats_json"] == "{}"
+        assert stats["total_videos_processed"] == 50
+        assert stats["total_images_processed"] == 50
+        assert "mp4" in stats["format_stats"]
 
-    def test_load_cumulative_stats_with_invalid_format_json(self, temp_dir):
-        """Test loading cumulative stats with invalid format JSON."""
+    def test_load_cumulative_stats_with_invalid_json(self, temp_dir):
+        """Test loading cumulative stats with invalid JSON file."""
         stats_dir = temp_dir / "statistics"
         manager = StatisticsManager(stats_dir)
 
-        # Create CSV with invalid JSON
-        with open(manager.cumulative_stats_file, "w", newline="", encoding="utf-8") as f:
-            writer = csv.DictWriter(
-                f,
-                fieldnames=[
-                    "total_runs",
-                    "total_files_processed",
-                    "format_stats_json",
-                ],
-            )
-            writer.writeheader()
-            writer.writerow(
-                {
-                    "total_runs": "1",
-                    "total_files_processed": "10",
-                    "format_stats_json": "invalid json {",
-                }
-            )
+        # Create invalid JSON file
+        with open(manager.cumulative_stats_file, "w", encoding="utf-8") as f:
+            f.write("invalid json {")
 
         stats = manager.load_cumulative_stats()
-        # Should pass through the value as-is (validation happens when used in print_stats)
-        assert stats["total_runs"] == 1
-        assert stats["format_stats_json"] == "invalid json {"
+        # Should return defaults when JSON is invalid
+        assert stats["total_runs"] == 0
+        assert stats["format_stats"] == {}
 
-    def test_load_cumulative_stats_with_empty_format_json(self, temp_dir):
-        """Test loading cumulative stats with empty format JSON."""
+    def test_load_cumulative_stats_with_missing_fields(self, temp_dir):
+        """Test loading cumulative stats with missing fields."""
         stats_dir = temp_dir / "statistics"
         manager = StatisticsManager(stats_dir)
 
-        # Create CSV with empty format_stats_json
-        with open(manager.cumulative_stats_file, "w", newline="", encoding="utf-8") as f:
-            writer = csv.DictWriter(
-                f,
-                fieldnames=[
-                    "total_runs",
-                    "format_stats_json",
-                ],
-            )
-            writer.writeheader()
-            writer.writerow(
-                {
-                    "total_runs": "1",
-                    "format_stats_json": "",
-                }
-            )
+        # Create JSON with minimal fields
+        test_data = {
+            "total_runs": 1,
+        }
+        
+        with open(manager.cumulative_stats_file, "w", encoding="utf-8") as f:
+            json.dump(test_data, f)
 
         stats = manager.load_cumulative_stats()
-        # Empty string is passed through as-is (row.get returns "" if key exists with empty value)
+        # Should fill in missing fields with defaults
         assert stats["total_runs"] == 1
-        assert stats["format_stats_json"] == ""
+        assert stats["format_stats"] == {}
+        assert stats["total_files_processed"] == 0
 
     def test_load_cumulative_stats_empty_file(self, temp_dir):
         """Test loading cumulative stats from empty file."""
@@ -454,25 +421,11 @@ class TestStatisticsManager:
         stats_dir = temp_dir / "statistics"
         manager = StatisticsManager(stats_dir)
 
-        # Create a file that exists so we can trigger an error in the reading
-        manager.cumulative_stats_file.touch()
+        # Create a file with invalid JSON
+        with open(manager.cumulative_stats_file, "w", encoding="utf-8") as f:
+            f.write("{corrupted json")
 
-        # Mock csv.DictReader to raise csv.Error when next() is called
-        original_dictreader = csv.DictReader
-
-        class MockDictReader:
-            def __init__(self, *args, **kwargs):
-                pass
-
-            def __iter__(self):
-                return self
-
-            def __next__(self):
-                raise csv.Error("Invalid CSV format")
-
-        # Patch csv.DictReader to raise an error
-        with patch("compressy.services.statistics.csv.DictReader", MockDictReader):
-            stats = manager.load_cumulative_stats()
+        stats = manager.load_cumulative_stats()
 
         # Should return defaults and print warning
         assert stats["total_runs"] == 0
@@ -557,9 +510,7 @@ class TestStatisticsManager:
         assert stats["total_videos_original_size_bytes"] == 700000
         assert stats["total_images_original_size_bytes"] == 300000
 
-        import json
-
-        format_stats = json.loads(stats["format_stats_json"])
+        format_stats = stats["format_stats"]
         assert "mp4" in format_stats
         assert format_stats["mp4"]["count"] == 5
         assert "jpg" in format_stats
@@ -638,18 +589,19 @@ class TestStatisticsManager:
             "overwrite": False,
         }
 
-        manager.append_run_history(run_stats, cmd_args)
+        run_uuid = "test-uuid-123"
+        manager.append_run_history(run_stats, cmd_args, run_uuid)
 
         # Verify file was created
         assert manager.run_history_file.exists()
 
         # Verify content
         with open(manager.run_history_file, "r", encoding="utf-8") as f:
-            reader = csv.DictReader(f)
-            rows = list(reader)
-            assert len(rows) == 1
-            assert rows[0]["files_processed"] == "5"
-            assert rows[0]["source_folder"] == "/test/folder"
+            runs = json.load(f)
+            assert len(runs) == 1
+            assert runs[0]["files_processed"] == 5
+            assert runs[0]["source_folder"] == "/test/folder"
+            assert runs[0]["run_id"] == "test-uuid-123"
 
     def test_append_run_history_existing_file(self, temp_dir):
         """Test appending run history to existing file."""
@@ -657,19 +609,20 @@ class TestStatisticsManager:
         manager = StatisticsManager(stats_dir)
 
         # Add first run
-        manager.append_run_history({"processed": 5}, {"source_folder": "/test1"})
+        manager.append_run_history({"processed": 5}, {"source_folder": "/test1"}, "uuid-1")
 
         # Add second run
-        manager.append_run_history({"processed": 10}, {"source_folder": "/test2"})
+        manager.append_run_history({"processed": 10}, {"source_folder": "/test2"}, "uuid-2")
 
         # Verify both runs are in file
         with open(manager.run_history_file, "r", encoding="utf-8") as f:
-            reader = csv.DictReader(f)
-            rows = list(reader)
-            assert len(rows) == 2
+            runs = json.load(f)
+            assert len(runs) == 2
+            assert runs[0]["run_id"] == "uuid-1"
+            assert runs[1]["run_id"] == "uuid-2"
 
     def test_append_run_history_permission_error(self, temp_dir, capsys):
-        """Test appending run history handles PermissionError (lines 311-314)."""
+        """Test appending run history handles PermissionError."""
         stats_dir = temp_dir / "statistics"
         manager = StatisticsManager(stats_dir)
 
@@ -678,13 +631,13 @@ class TestStatisticsManager:
 
         # Mock open to raise PermissionError
         with patch("builtins.open", side_effect=PermissionError("Permission denied")):
-            manager.append_run_history(run_stats, cmd_args)
+            manager.append_run_history(run_stats, cmd_args, "test-uuid")
 
         captured = capsys.readouterr()
         assert "Warning" in captured.out or "Permission" in captured.out
 
     def test_append_run_history_general_error(self, temp_dir, capsys):
-        """Test appending run history handles general errors (lines 311-314)."""
+        """Test appending run history handles general errors."""
         stats_dir = temp_dir / "statistics"
         manager = StatisticsManager(stats_dir)
 
@@ -693,7 +646,7 @@ class TestStatisticsManager:
 
         # Mock open to raise general exception
         with patch("builtins.open", side_effect=IOError("Disk full")):
-            manager.append_run_history(run_stats, cmd_args)
+            manager.append_run_history(run_stats, cmd_args, "test-uuid")
 
         captured = capsys.readouterr()
         assert "Warning" in captured.out or "Error" in captured.out
@@ -808,18 +761,21 @@ class TestStatisticsManager:
         assert ".JPG:" in output.out
         assert ".PNG:" in output.out
 
-    def test_print_stats_with_invalid_format_json(self, temp_dir, capsys):
-        """Test printing stats handles invalid format JSON gracefully."""
+    def test_print_stats_with_format_stats(self, temp_dir, capsys):
+        """Test printing stats with format statistics."""
         stats_dir = temp_dir / "statistics"
         manager = StatisticsManager(stats_dir)
 
-        # Create stats with invalid JSON
+        # Create stats with format data
         stats = manager.load_cumulative_stats()
         stats.update(
             {
                 "total_runs": 1,
                 "total_files_processed": 10,
-                "format_stats_json": "invalid json {",
+                "format_stats": {
+                    "mp4": {"count": 5, "original_size": 500000, "compressed_size": 250000, "space_saved": 250000},
+                    "jpg": {"count": 3, "original_size": 300000, "compressed_size": 150000, "space_saved": 150000},
+                },
             }
         )
         manager.save_cumulative_stats(stats)
@@ -827,39 +783,11 @@ class TestStatisticsManager:
         manager.print_stats()
 
         output = capsys.readouterr()
-        # Should not crash, just skip format display
+        # Should display format statistics
         assert "Cumulative Compression Statistics" in output.out
-
-    def test_print_stats_with_typeerror_format_json(self, temp_dir, capsys):
-        """Test printing stats handles TypeError in JSON parsing gracefully."""
-        stats_dir = temp_dir / "statistics"
-        manager = StatisticsManager(stats_dir)
-
-        # Create stats with format_stats_json that will cause TypeError
-        # (like a non-string value that can't be parsed)
-        stats = manager.load_cumulative_stats()
-        stats.update(
-            {
-                "total_runs": 1,
-                "total_files_processed": 10,
-            }
-        )
-        manager.save_cumulative_stats(stats)
-
-        # Mock json.loads to raise TypeError
-        import json
-
-        original_loads = json.loads
-
-        def mock_loads_raise_typeerror(*args, **kwargs):
-            raise TypeError("Invalid type")
-
-        with patch("compressy.services.statistics.json.loads", side_effect=mock_loads_raise_typeerror):
-            manager.print_stats()
-
-        output = capsys.readouterr()
-        # Should not crash, just skip format display
-        assert "Cumulative Compression Statistics" in output.out
+        assert "By Format:" in output.out
+        assert ".MP4:" in output.out
+        assert ".JPG:" in output.out
 
     def test_print_stats_only_videos(self, temp_dir, capsys):
         """Test printing stats when only videos are processed."""
@@ -925,14 +853,16 @@ class TestStatisticsManager:
         manager = StatisticsManager(stats_dir)
 
         # Add some history
-        manager.append_run_history({"processed": 5}, {"source_folder": "/test1"})
-        manager.append_run_history({"processed": 10}, {"source_folder": "/test2"})
+        manager.append_run_history({"processed": 5}, {"source_folder": "/test1"}, "uuid-1")
+        manager.append_run_history({"processed": 10}, {"source_folder": "/test2"}, "uuid-2")
 
         history = manager.load_run_history()
 
         assert len(history) == 2
-        assert history[0]["files_processed"] == "5"
-        assert history[1]["files_processed"] == "10"
+        assert history[0]["files_processed"] == 5
+        assert history[1]["files_processed"] == 10
+        assert history[0]["run_id"] == "uuid-1"
+        assert history[1]["run_id"] == "uuid-2"
 
     def test_load_run_history_general_error(self, temp_dir, capsys):
         """Test loading run history handles general errors (lines 370-372)."""
@@ -1110,25 +1040,99 @@ class TestStatisticsManager:
         assert stats["total_runs"] == 0
         assert stats["total_files_processed"] == 0
 
-    def test_safe_int_conversion_handles_type_error(self, temp_dir):
-        """Test that _safe_int_conversion handles TypeError (lines 194-195)."""
+    def test_load_files_log_no_file(self, temp_dir):
+        """Test loading files log when file doesn't exist."""
         stats_dir = temp_dir / "statistics"
         manager = StatisticsManager(stats_dir)
 
-        # Create CSV file, then mock the row to have None values
-        manager.cumulative_stats_file.touch()
+        files_log = manager.load_files_log()
 
-        # Mock csv.DictReader to return a row with None values
-        class MockRow:
-            def get(self, key, default=None):
-                if key in ["total_runs", "total_files_processed"]:
-                    return None  # This will cause TypeError when trying int(None)
-                return "0"
+        assert files_log == []
 
-        with patch("compressy.services.statistics.csv.DictReader") as mock_reader:
-            mock_reader.return_value = [MockRow()]
-            stats = manager.load_cumulative_stats()
+    def test_load_files_log_with_data(self, temp_dir):
+        """Test loading files log with data."""
+        stats_dir = temp_dir / "statistics"
+        manager = StatisticsManager(stats_dir)
 
-        # Should default to 0 for None values
-        assert stats["total_runs"] == 0
-        assert stats["total_files_processed"] == 0
+        # Create files log
+        test_data = [
+            {
+                "timestamp": "2024-01-01 12:00:00",
+                "run_id": "uuid-1",
+                "file_name": "video.mp4",
+                "original_path": "/path/to/video.mp4",
+                "new_path": "/path/to/compressed/video.mp4",
+                "file_type": "video",
+                "format": "mp4",
+                "modifications": {"compressed": True, "video_crf": 23},
+                "size_before_bytes": 1000000,
+                "size_after_bytes": 500000,
+                "space_saved_bytes": 500000,
+                "compression_ratio_percent": 50.0,
+                "processing_time_seconds": 5.2,
+                "status": "processed",
+            }
+        ]
+
+        with open(manager.files_log_file, "w", encoding="utf-8") as f:
+            json.dump(test_data, f)
+
+        files_log = manager.load_files_log()
+
+        assert len(files_log) == 1
+        assert files_log[0]["run_id"] == "uuid-1"
+        assert files_log[0]["file_name"] == "video.mp4"
+
+    def test_append_to_files_log(self, temp_dir):
+        """Test appending files to files log."""
+        stats_dir = temp_dir / "statistics"
+        manager = StatisticsManager(stats_dir)
+
+        files_data = [
+            {
+                "name": "video.mp4",
+                "original_size": 1000000,
+                "compressed_size": 500000,
+                "space_saved": 500000,
+                "compression_ratio": 50.0,
+                "processing_time": 5.2,
+                "status": "processed",
+            }
+        ]
+
+        cmd_args = {"video_crf": 23, "image_quality": 80}
+        run_uuid = "test-uuid-123"
+
+        manager.append_to_files_log(files_data, run_uuid, cmd_args)
+
+        # Verify file was created
+        assert manager.files_log_file.exists()
+
+        # Verify content
+        with open(manager.files_log_file, "r", encoding="utf-8") as f:
+            files_log = json.load(f)
+            assert len(files_log) == 1
+            assert files_log[0]["run_id"] == "test-uuid-123"
+            assert files_log[0]["file_name"] == "video.mp4"
+            assert files_log[0]["file_type"] == "video"
+            assert files_log[0]["format"] == "mp4"
+
+    def test_append_to_files_log_multiple_runs(self, temp_dir):
+        """Test appending files from multiple runs."""
+        stats_dir = temp_dir / "statistics"
+        manager = StatisticsManager(stats_dir)
+
+        files_data1 = [{"name": "video1.mp4", "original_size": 1000000, "compressed_size": 500000, "space_saved": 500000, "compression_ratio": 50.0, "processing_time": 5.2, "status": "processed"}]
+        files_data2 = [{"name": "image1.jpg", "original_size": 500000, "compressed_size": 250000, "space_saved": 250000, "compression_ratio": 50.0, "processing_time": 2.1, "status": "processed"}]
+
+        cmd_args = {"video_crf": 23, "image_quality": 80}
+
+        manager.append_to_files_log(files_data1, "uuid-1", cmd_args)
+        manager.append_to_files_log(files_data2, "uuid-2", cmd_args)
+
+        # Verify both files are in log
+        with open(manager.files_log_file, "r", encoding="utf-8") as f:
+            files_log = json.load(f)
+            assert len(files_log) == 2
+            assert files_log[0]["run_id"] == "uuid-1"
+            assert files_log[1]["run_id"] == "uuid-2"

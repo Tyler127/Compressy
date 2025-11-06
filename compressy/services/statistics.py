@@ -1,4 +1,3 @@
-import csv
 import json
 from datetime import datetime
 from pathlib import Path
@@ -295,12 +294,13 @@ class StatisticsManager:
         """
         self.statistics_dir = statistics_dir
         self.statistics_dir.mkdir(parents=True, exist_ok=True)
-        self.cumulative_stats_file = self.statistics_dir / "statistics.csv"
-        self.run_history_file = self.statistics_dir / "run_history.csv"
+        self.cumulative_stats_file = self.statistics_dir / "statistics.json"
+        self.run_history_file = self.statistics_dir / "run_history.json"
+        self.files_log_file = self.statistics_dir / "files.json"
 
     def load_cumulative_stats(self) -> Dict:
         """
-        Load existing cumulative statistics from CSV file.
+        Load existing cumulative statistics from JSON file.
 
         Returns:
             Dictionary with cumulative statistics, or defaults if file doesn't exist
@@ -326,8 +326,8 @@ class StatisticsManager:
             "total_images_original_size_bytes": 0,
             "total_images_compressed_size_bytes": 0,
             "total_images_space_saved_bytes": 0,
-            # Format statistics (stored as JSON string)
-            "format_stats_json": "{}",
+            # Format statistics (stored as nested dict)
+            "format_stats": {},
             "last_updated": None,
         }
 
@@ -335,51 +335,16 @@ class StatisticsManager:
             return default_stats
 
         try:
-            with open(self.cumulative_stats_file, "r", newline="", encoding="utf-8") as f:
-                reader = csv.DictReader(f)
-                row = next(reader, None)
-
-                if row is None:
-                    return default_stats
-
-                # Convert string values to appropriate types, handling empty strings
-                def safe_int(value, default=0):
-                    """Safely convert value to int, handling None and empty strings."""
-                    if value is None or value == "":
-                        return default
-                    try:
-                        return int(value)
-                    except (ValueError, TypeError):
-                        return default
-
-                stats = {
-                    "total_runs": safe_int(row.get("total_runs")),
-                    "total_files_processed": safe_int(row.get("total_files_processed")),
-                    "total_files_skipped": safe_int(row.get("total_files_skipped")),
-                    "total_files_errors": safe_int(row.get("total_files_errors")),
-                    "total_original_size_bytes": safe_int(row.get("total_original_size_bytes")),
-                    "total_compressed_size_bytes": safe_int(row.get("total_compressed_size_bytes")),
-                    "total_space_saved_bytes": safe_int(row.get("total_space_saved_bytes")),
-                    # Type-level statistics (with backward compatibility)
-                    "total_videos_processed": safe_int(row.get("total_videos_processed")),
-                    "total_images_processed": safe_int(row.get("total_images_processed")),
-                    "total_videos_skipped": safe_int(row.get("total_videos_skipped")),
-                    "total_images_skipped": safe_int(row.get("total_images_skipped")),
-                    "total_videos_errors": safe_int(row.get("total_videos_errors")),
-                    "total_images_errors": safe_int(row.get("total_images_errors")),
-                    "total_videos_original_size_bytes": safe_int(row.get("total_videos_original_size_bytes")),
-                    "total_videos_compressed_size_bytes": safe_int(row.get("total_videos_compressed_size_bytes")),
-                    "total_videos_space_saved_bytes": safe_int(row.get("total_videos_space_saved_bytes")),
-                    "total_images_original_size_bytes": safe_int(row.get("total_images_original_size_bytes")),
-                    "total_images_compressed_size_bytes": safe_int(row.get("total_images_compressed_size_bytes")),
-                    "total_images_space_saved_bytes": safe_int(row.get("total_images_space_saved_bytes")),
-                    # Format statistics
-                    "format_stats_json": row.get("format_stats_json", "{}"),
-                    "last_updated": row.get("last_updated") or None,
-                }
-
+            with open(self.cumulative_stats_file, "r", encoding="utf-8") as f:
+                stats = json.load(f)
+                
+                # Ensure all required fields exist with defaults
+                for key, default_value in default_stats.items():
+                    if key not in stats:
+                        stats[key] = default_value
+                
                 return stats
-        except (ValueError, KeyError, csv.Error) as e:
+        except (json.JSONDecodeError, ValueError) as e:
             print(f"Warning: Error reading statistics file ({e}). Creating new file.")
             return default_stats
         except Exception as e:
@@ -418,9 +383,9 @@ class StatisticsManager:
         cumulative["total_images_compressed_size_bytes"] += run_stats.get("images_compressed_size", 0)
         cumulative["total_images_space_saved_bytes"] += run_stats.get("images_space_saved", 0)
 
-        # Update format statistics
+        # Update format statistics (now stored as nested dict)
         run_format_stats = run_stats.get("format_stats", {})
-        cumulative_format_stats = json.loads(cumulative.get("format_stats_json", "{}"))
+        cumulative_format_stats = cumulative.get("format_stats", {})
 
         for format_ext, format_data in run_format_stats.items():
             if format_ext not in cumulative_format_stats:
@@ -435,120 +400,70 @@ class StatisticsManager:
             cumulative_format_stats[format_ext]["compressed_size"] += format_data.get("compressed_size", 0)
             cumulative_format_stats[format_ext]["space_saved"] += format_data.get("space_saved", 0)
 
-        cumulative["format_stats_json"] = json.dumps(cumulative_format_stats)
+        cumulative["format_stats"] = cumulative_format_stats
         cumulative["last_updated"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
         self.save_cumulative_stats(cumulative)
 
     def save_cumulative_stats(self, stats: Dict) -> None:
         """
-        Save cumulative statistics to CSV file.
+        Save cumulative statistics to JSON file.
 
         Args:
             stats: Dictionary with cumulative statistics
         """
         try:
-            with open(self.cumulative_stats_file, "w", newline="", encoding="utf-8") as f:
-                writer = csv.DictWriter(
-                    f,
-                    fieldnames=[
-                        "total_runs",
-                        "total_files_processed",
-                        "total_files_skipped",
-                        "total_files_errors",
-                        "total_original_size_bytes",
-                        "total_compressed_size_bytes",
-                        "total_space_saved_bytes",
-                        "total_videos_processed",
-                        "total_images_processed",
-                        "total_videos_skipped",
-                        "total_images_skipped",
-                        "total_videos_errors",
-                        "total_images_errors",
-                        "total_videos_original_size_bytes",
-                        "total_videos_compressed_size_bytes",
-                        "total_videos_space_saved_bytes",
-                        "total_images_original_size_bytes",
-                        "total_images_compressed_size_bytes",
-                        "total_images_space_saved_bytes",
-                        "format_stats_json",
-                        "last_updated",
-                    ],
-                )
-                writer.writeheader()
-                writer.writerow(stats)
+            with open(self.cumulative_stats_file, "w", encoding="utf-8") as f:
+                json.dump(stats, f, indent=2)
         except PermissionError:
             print(f"Warning: Permission denied when writing to {self.cumulative_stats_file}")
         except Exception as e:
             print(f"Warning: Error saving cumulative statistics ({e})")
 
-    def append_run_history(self, run_stats: Dict, cmd_args: Dict) -> None:
+    def append_run_history(self, run_stats: Dict, cmd_args: Dict, run_uuid: str) -> None:
         """
-        Append current run to run history CSV file.
+        Append current run to run history JSON file.
 
         Args:
             run_stats: Statistics dictionary from current compression run
             cmd_args: Command line arguments used for this run
+            run_uuid: Unique identifier for this compression run
         """
         try:
-            file_exists = self.run_history_file.exists()
+            # Load existing history
+            history = self.load_run_history()
 
-            with open(self.run_history_file, "a", newline="", encoding="utf-8") as f:
-                fieldnames = [
-                    "timestamp",
-                    "source_folder",
-                    "files_processed",
-                    "files_skipped",
-                    "files_errors",
-                    "space_saved_bytes",
-                    "videos_processed",
-                    "images_processed",
-                    "videos_original_size_bytes",
-                    "videos_compressed_size_bytes",
-                    "videos_space_saved_bytes",
-                    "images_original_size_bytes",
-                    "images_compressed_size_bytes",
-                    "images_space_saved_bytes",
-                    "format_stats_json",
-                    "processing_time_seconds",
-                    "video_crf",
-                    "image_quality",
-                    "recursive",
-                    "overwrite",
-                ]
+            # Prepare run record
+            run_record = {
+                "run_id": run_uuid,
+                "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                "source_folder": cmd_args.get("source_folder", "N/A"),
+                "files_processed": run_stats.get("processed", 0),
+                "files_skipped": run_stats.get("skipped", 0),
+                "files_errors": run_stats.get("errors", 0),
+                "space_saved_bytes": run_stats.get("space_saved", 0),
+                "videos_processed": run_stats.get("videos_processed", 0),
+                "images_processed": run_stats.get("images_processed", 0),
+                "videos_original_size_bytes": run_stats.get("videos_original_size", 0),
+                "videos_compressed_size_bytes": run_stats.get("videos_compressed_size", 0),
+                "videos_space_saved_bytes": run_stats.get("videos_space_saved", 0),
+                "images_original_size_bytes": run_stats.get("images_original_size", 0),
+                "images_compressed_size_bytes": run_stats.get("images_compressed_size", 0),
+                "images_space_saved_bytes": run_stats.get("images_space_saved", 0),
+                "format_stats": run_stats.get("format_stats", {}),
+                "processing_time_seconds": run_stats.get("total_processing_time", 0.0),
+                "video_crf": cmd_args.get("video_crf"),
+                "image_quality": cmd_args.get("image_quality"),
+                "recursive": cmd_args.get("recursive", False),
+                "overwrite": cmd_args.get("overwrite", False),
+            }
 
-                writer = csv.DictWriter(f, fieldnames=fieldnames)
+            # Append new record
+            history.append(run_record)
 
-                # Write header if file is new
-                if not file_exists:
-                    writer.writeheader()
-
-                # Prepare run record
-                format_stats_json = json.dumps(run_stats.get("format_stats", {}))
-                run_record = {
-                    "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-                    "source_folder": cmd_args.get("source_folder", "N/A"),
-                    "files_processed": run_stats.get("processed", 0),
-                    "files_skipped": run_stats.get("skipped", 0),
-                    "files_errors": run_stats.get("errors", 0),
-                    "space_saved_bytes": run_stats.get("space_saved", 0),
-                    "videos_processed": run_stats.get("videos_processed", 0),
-                    "images_processed": run_stats.get("images_processed", 0),
-                    "videos_original_size_bytes": run_stats.get("videos_original_size", 0),
-                    "videos_compressed_size_bytes": run_stats.get("videos_compressed_size", 0),
-                    "videos_space_saved_bytes": run_stats.get("videos_space_saved", 0),
-                    "images_original_size_bytes": run_stats.get("images_original_size", 0),
-                    "images_compressed_size_bytes": run_stats.get("images_compressed_size", 0),
-                    "images_space_saved_bytes": run_stats.get("images_space_saved", 0),
-                    "format_stats_json": format_stats_json,
-                    "processing_time_seconds": run_stats.get("total_processing_time", 0.0),
-                    "video_crf": cmd_args.get("video_crf", "N/A"),
-                    "image_quality": cmd_args.get("image_quality", "N/A"),
-                    "recursive": cmd_args.get("recursive", False),
-                    "overwrite": cmd_args.get("overwrite", False),
-                }
-
-                writer.writerow(run_record)
+            # Save updated history
+            with open(self.run_history_file, "w", encoding="utf-8") as f:
+                json.dump(history, f, indent=2)
         except PermissionError:
             print(f"Warning: Permission denied when writing to {self.run_history_file}")
         except Exception as e:
@@ -635,40 +550,35 @@ class StatisticsManager:
                     print(f"    Compression: {image_ratio:.2f}%")
 
         # Format-level breakdown (only show formats with count > 0)
-        format_stats_json = stats.get("format_stats_json", "{}")
-        try:
-            format_stats = json.loads(format_stats_json) if format_stats_json else {}
-            if format_stats:
-                # Sort formats by count (descending)
-                sorted_formats = sorted(format_stats.items(), key=lambda x: x[1].get("count", 0), reverse=True)
-                # Only show formats with count > 0
-                formats_to_show = [(ext, data) for ext, data in sorted_formats if data.get("count", 0) > 0]
+        format_stats = stats.get("format_stats", {})
+        if format_stats:
+            # Sort formats by count (descending)
+            sorted_formats = sorted(format_stats.items(), key=lambda x: x[1].get("count", 0), reverse=True)
+            # Only show formats with count > 0
+            formats_to_show = [(ext, data) for ext, data in sorted_formats if data.get("count", 0) > 0]
 
-                if formats_to_show:
-                    print()
-                    print("By Format:")
-                    for format_ext, format_data in formats_to_show:
-                        count = format_data.get("count", 0)
-                        orig_size = format_data.get("original_size", 0)
-                        comp_size = format_data.get("compressed_size", 0)
-                        saved = format_data.get("space_saved", 0)
-                        print(
-                            f"  .{format_ext.upper()}: {count:,} files, "
-                            f"{format_size(orig_size)} → {format_size(comp_size)} "
-                            f"({format_size(saved)} saved)"
-                        )
-                        if orig_size > 0:
-                            format_ratio = (saved / orig_size) * 100
-                            print(f"    Compression: {format_ratio:.2f}%")
-        except (json.JSONDecodeError, TypeError):
-            # If format_stats_json is invalid, just skip it
-            pass
+            if formats_to_show:
+                print()
+                print("By Format:")
+                for format_ext, format_data in formats_to_show:
+                    count = format_data.get("count", 0)
+                    orig_size = format_data.get("original_size", 0)
+                    comp_size = format_data.get("compressed_size", 0)
+                    saved = format_data.get("space_saved", 0)
+                    print(
+                        f"  .{format_ext.upper()}: {count:,} files, "
+                        f"{format_size(orig_size)} → {format_size(comp_size)} "
+                        f"({format_size(saved)} saved)"
+                    )
+                    if orig_size > 0:
+                        format_ratio = (saved / orig_size) * 100
+                        print(f"    Compression: {format_ratio:.2f}%")
 
         print("=" * 60)
 
     def load_run_history(self) -> List[Dict]:
         """
-        Load run history from CSV file.
+        Load run history from JSON file.
 
         Returns:
             List of dictionaries containing run history records
@@ -677,12 +587,12 @@ class StatisticsManager:
             return []
 
         try:
-            runs = []
-            with open(self.run_history_file, "r", newline="", encoding="utf-8") as f:
-                reader = csv.DictReader(f)
-                for row in reader:
-                    runs.append(row)
-            return runs
+            with open(self.run_history_file, "r", encoding="utf-8") as f:
+                runs = json.load(f)
+            return runs if isinstance(runs, list) else []
+        except (json.JSONDecodeError, ValueError) as e:
+            print(f"Warning: Error reading run history ({e})")
+            return []
         except Exception as e:
             print(f"Warning: Error reading run history ({e})")
             return []
@@ -715,6 +625,8 @@ class StatisticsManager:
 
         for idx, run in enumerate(runs, 1):
             print(f"\nRun #{idx}")
+            if "run_id" in run:
+                print(f"  Run ID: {run['run_id']}")
             print(f"  Timestamp: {run.get('timestamp', 'N/A')}")
             print(f"  Source Folder: {run.get('source_folder', 'N/A')}")
             print(
@@ -723,10 +635,10 @@ class StatisticsManager:
                 f"{run.get('files_errors', 0)} errors"
             )
 
-            space_saved = int(run.get("space_saved_bytes", 0))
+            space_saved = run.get("space_saved_bytes", 0)
             print(f"  Space Saved: {format_size(space_saved)}")
 
-            time_seconds = float(run.get("processing_time_seconds", 0))
+            time_seconds = run.get("processing_time_seconds", 0)
             if time_seconds > 0:
                 hours = int(time_seconds // 3600)
                 minutes = int((time_seconds % 3600) // 60)
@@ -742,8 +654,96 @@ class StatisticsManager:
             print(
                 f"  Settings: CRF={run.get('video_crf', 'N/A')}, "
                 f"Quality={run.get('image_quality', 'N/A')}, "
-                f"Recursive={run.get('recursive', 'False')}, "
-                f"Overwrite={run.get('overwrite', 'False')}"
+                f"Recursive={run.get('recursive', False)}, "
+                f"Overwrite={run.get('overwrite', False)}"
             )
 
         print("\n" + "=" * 60)
+
+    def load_files_log(self) -> List[Dict]:
+        """
+        Load complete file processing history from files.json.
+
+        Returns:
+            List of dictionaries containing file processing records
+        """
+        if not self.files_log_file.exists():
+            return []
+
+        try:
+            with open(self.files_log_file, "r", encoding="utf-8") as f:
+                files = json.load(f)
+            return files if isinstance(files, list) else []
+        except (json.JSONDecodeError, ValueError) as e:
+            print(f"Warning: Error reading files log ({e})")
+            return []
+        except Exception as e:
+            print(f"Warning: Error reading files log ({e})")
+            return []
+
+    def append_to_files_log(self, files_data: List[Dict], run_uuid: str, cmd_args: Dict) -> None:
+        """
+        Append files from current run to files.json.
+
+        Args:
+            files_data: List of file info dictionaries from current run
+            run_uuid: Unique identifier for this compression run
+            cmd_args: Command line arguments used for this run
+        """
+        try:
+            # Load existing files log
+            files_log = self.load_files_log()
+
+            # Process each file and add to log
+            timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            
+            for file_info in files_data:
+                # Extract file type and format from name
+                file_name = file_info.get("name", "")
+                file_extension = file_name.rsplit(".", 1)[-1].lower() if "." in file_name else ""
+                
+                # Determine file type based on extension
+                video_extensions = ["mp4", "avi", "mov", "mkv", "flv", "wmv", "webm", "m4v"]
+                image_extensions = ["jpg", "jpeg", "png", "gif", "bmp", "webp", "tiff", "svg"]
+                
+                if file_extension in video_extensions:
+                    file_type = "video"
+                elif file_extension in image_extensions:
+                    file_type = "image"
+                else:
+                    file_type = "unknown"
+                
+                # Create file record
+                file_record = {
+                    "timestamp": timestamp,
+                    "run_id": run_uuid,
+                    "file_name": file_name,
+                    "original_path": file_info.get("original_path", "N/A"),
+                    "new_path": file_info.get("new_path", "N/A"),
+                    "file_type": file_type,
+                    "format": file_extension,
+                    "modifications": {
+                        "compressed": file_info.get("status") == "processed",
+                        "video_crf": cmd_args.get("video_crf") if file_type == "video" else None,
+                        "video_preset": cmd_args.get("video_preset") if file_type == "video" else None,
+                        "video_resize": cmd_args.get("video_resize") if file_type == "video" else None,
+                        "image_quality": cmd_args.get("image_quality") if file_type == "image" else None,
+                        "image_resize": cmd_args.get("image_resize") if file_type == "image" else None,
+                    },
+                    "size_before_bytes": file_info.get("original_size", 0),
+                    "size_after_bytes": file_info.get("compressed_size", 0),
+                    "space_saved_bytes": file_info.get("space_saved", 0),
+                    "compression_ratio_percent": file_info.get("compression_ratio", 0.0),
+                    "processing_time_seconds": file_info.get("processing_time", 0.0),
+                    "status": file_info.get("status", "unknown"),
+                }
+                
+                files_log.append(file_record)
+
+            # Save updated files log
+            with open(self.files_log_file, "w", encoding="utf-8") as f:
+                json.dump(files_log, f, indent=2)
+        except PermissionError:
+            print(f"Warning: Permission denied when writing to {self.files_log_file}")
+        except Exception as e:
+            print(f"Warning: Error saving files log ({e})")

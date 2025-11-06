@@ -1,4 +1,5 @@
 import argparse
+import uuid
 from pathlib import Path
 from compressy.core.config import CompressionConfig
 from compressy.core.media_compressor import MediaCompressor
@@ -129,6 +130,9 @@ def main():
         parser.error("source_folder is required for compression (or use --view-stats/--view-history)")
     
     try:
+        # Generate unique UUID for this compression run
+        run_uuid = str(uuid.uuid4())
+        
         # Create configuration
         config = CompressionConfig(
             source_folder=Path(args.source_folder),
@@ -173,7 +177,7 @@ def main():
             cmd_args['backup_dir'] = args.backup_dir
         
         report_generator = ReportGenerator(Path.cwd())
-        report_paths = report_generator.generate(stats, compressed_folder_name, recursive=args.recursive, cmd_args=cmd_args)
+        report_paths = report_generator.generate(stats, compressed_folder_name, recursive=args.recursive, cmd_args=cmd_args, run_uuid=run_uuid)
         
         # Update cumulative statistics
         try:
@@ -182,7 +186,8 @@ def main():
             statistics_dir = script_dir / "statistics"
             stats_manager = StatisticsManager(statistics_dir)
             stats_manager.update_cumulative_stats(stats)
-            stats_manager.append_run_history(stats, cmd_args)
+            stats_manager.append_run_history(stats, cmd_args, run_uuid)
+            stats_manager.append_to_files_log(stats.get('files', []), run_uuid, cmd_args)
             print(f"Statistics updated: {statistics_dir}")
         except Exception as e:
             import traceback
