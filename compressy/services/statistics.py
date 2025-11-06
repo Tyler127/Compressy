@@ -131,7 +131,7 @@ class StatisticsTracker:
         if file_extension:
             self._initialize_format_stats(self.stats["format_stats"], file_extension)
             format_stat = self.stats["format_stats"][file_extension]
-            
+
             if status == "processed":
                 format_stat["count"] += 1
                 format_stat["original_size"] += original_size
@@ -421,7 +421,7 @@ class StatisticsManager:
         # Update format statistics
         run_format_stats = run_stats.get("format_stats", {})
         cumulative_format_stats = json.loads(cumulative.get("format_stats_json", "{}"))
-        
+
         for format_ext, format_data in run_format_stats.items():
             if format_ext not in cumulative_format_stats:
                 cumulative_format_stats[format_ext] = {
@@ -434,7 +434,7 @@ class StatisticsManager:
             cumulative_format_stats[format_ext]["original_size"] += format_data.get("original_size", 0)
             cumulative_format_stats[format_ext]["compressed_size"] += format_data.get("compressed_size", 0)
             cumulative_format_stats[format_ext]["space_saved"] += format_data.get("space_saved", 0)
-        
+
         cumulative["format_stats_json"] = json.dumps(cumulative_format_stats)
         cumulative["last_updated"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
@@ -575,7 +575,7 @@ class StatisticsManager:
         print(f"  Processed: {stats['total_files_processed']:,} files")
         print(f"  Skipped: {stats['total_files_skipped']:,} files")
         print(f"  Errors: {stats['total_files_errors']:,} files")
-        
+
         # Type-level breakdown (only show if > 0)
         videos_processed = stats.get("total_videos_processed", 0)
         images_processed = stats.get("total_images_processed", 0)
@@ -583,7 +583,7 @@ class StatisticsManager:
         images_skipped = stats.get("total_images_skipped", 0)
         videos_errors = stats.get("total_videos_errors", 0)
         images_errors = stats.get("total_images_errors", 0)
-        
+
         if videos_processed > 0 or images_processed > 0:
             print()
             print("By Type:")
@@ -591,7 +591,7 @@ class StatisticsManager:
                 print(f"  Videos: {videos_processed:,} processed, {videos_skipped:,} skipped, {videos_errors:,} errors")
             if images_processed > 0 or images_skipped > 0 or images_errors > 0:
                 print(f"  Images: {images_processed:,} processed, {images_skipped:,} skipped, {images_errors:,} errors")
-        
+
         print()
         print("Size Statistics:")
         original_size = stats["total_original_size_bytes"]
@@ -605,7 +605,7 @@ class StatisticsManager:
         if original_size > 0:
             compression_ratio = (space_saved / original_size) * 100
             print(f"  Overall Compression: {compression_ratio:.2f}%")
-        
+
         # Type-level size breakdown (only show if > 0)
         videos_original = stats.get("total_videos_original_size_bytes", 0)
         videos_compressed = stats.get("total_videos_compressed_size_bytes", 0)
@@ -613,37 +613,37 @@ class StatisticsManager:
         images_original = stats.get("total_images_original_size_bytes", 0)
         images_compressed = stats.get("total_images_compressed_size_bytes", 0)
         images_space_saved = stats.get("total_images_space_saved_bytes", 0)
-        
+
         if videos_original > 0 or images_original > 0:
             print()
             print("Size by Type:")
             if videos_original > 0:
-                print(f"  Videos: {format_size(videos_original)} → {format_size(videos_compressed)} "
-                      f"({format_size(videos_space_saved)} saved)")
+                print(
+                    f"  Videos: {format_size(videos_original)} → {format_size(videos_compressed)} "
+                    f"({format_size(videos_space_saved)} saved)"
+                )
                 if videos_original > 0:
                     video_ratio = (videos_space_saved / videos_original) * 100
                     print(f"    Compression: {video_ratio:.2f}%")
             if images_original > 0:
-                print(f"  Images: {format_size(images_original)} → {format_size(images_compressed)} "
-                      f"({format_size(images_space_saved)} saved)")
+                print(
+                    f"  Images: {format_size(images_original)} → {format_size(images_compressed)} "
+                    f"({format_size(images_space_saved)} saved)"
+                )
                 if images_original > 0:
                     image_ratio = (images_space_saved / images_original) * 100
                     print(f"    Compression: {image_ratio:.2f}%")
-        
+
         # Format-level breakdown (only show formats with count > 0)
         format_stats_json = stats.get("format_stats_json", "{}")
         try:
             format_stats = json.loads(format_stats_json) if format_stats_json else {}
             if format_stats:
                 # Sort formats by count (descending)
-                sorted_formats = sorted(
-                    format_stats.items(),
-                    key=lambda x: x[1].get("count", 0),
-                    reverse=True
-                )
+                sorted_formats = sorted(format_stats.items(), key=lambda x: x[1].get("count", 0), reverse=True)
                 # Only show formats with count > 0
                 formats_to_show = [(ext, data) for ext, data in sorted_formats if data.get("count", 0) > 0]
-                
+
                 if formats_to_show:
                     print()
                     print("By Format:")
@@ -652,9 +652,11 @@ class StatisticsManager:
                         orig_size = format_data.get("original_size", 0)
                         comp_size = format_data.get("compressed_size", 0)
                         saved = format_data.get("space_saved", 0)
-                        print(f"  .{format_ext.upper()}: {count:,} files, "
-                              f"{format_size(orig_size)} → {format_size(comp_size)} "
-                              f"({format_size(saved)} saved)")
+                        print(
+                            f"  .{format_ext.upper()}: {count:,} files, "
+                            f"{format_size(orig_size)} → {format_size(comp_size)} "
+                            f"({format_size(saved)} saved)"
+                        )
                         if orig_size > 0:
                             format_ratio = (saved / orig_size) * 100
                             print(f"    Compression: {format_ratio:.2f}%")

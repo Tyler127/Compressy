@@ -32,7 +32,7 @@ class TestCompressyMain:
         with patch("sys.argv", ["compressy.py"]):
             with pytest.raises(SystemExit):
                 compressy_main.main()
-        
+
         output = capsys.readouterr()
         # Should show help or error message
         assert len(output.out) > 0 or len(output.err) > 0
@@ -147,7 +147,7 @@ class TestCompressyMain:
         with patch("sys.argv", ["compressy.py"]):
             with pytest.raises(SystemExit):
                 compressy_main.main()
-        
+
         output = capsys.readouterr()
         # Should show error about source_folder being required
         assert "source_folder" in output.out.lower() or "source_folder" in output.err.lower()
@@ -164,16 +164,23 @@ class TestCompressyMain:
         mock_argv.__getitem__.side_effect = lambda i: [
             "compressy.py",
             str(temp_dir),
-            "--video-crf", "26",
-            "--video-preset", "fast",
-            "--image-quality", "80",
-            "--image-resize", "90",
+            "--video-crf",
+            "26",
+            "--video-preset",
+            "fast",
+            "--image-quality",
+            "80",
+            "--image-resize",
+            "90",
             "--recursive",
             "--overwrite",
-            "--ffmpeg-path", "/custom/path/ffmpeg",
-            "--progress-interval", "2.0",
+            "--ffmpeg-path",
+            "/custom/path/ffmpeg",
+            "--progress-interval",
+            "2.0",
             "--keep-if-larger",
-            "--backup-dir", str(backup_dir),
+            "--backup-dir",
+            str(backup_dir),
             "--preserve-format",
         ][i]
 
@@ -311,7 +318,9 @@ class TestCompressyMain:
     @patch("compressy.py.MediaCompressor")
     @patch("compressy.py.CompressionConfig")
     @patch("sys.argv")
-    def test_main_recursive_multiple_reports(self, mock_argv, mock_config_class, mock_compressor_class, temp_dir, capsys):
+    def test_main_recursive_multiple_reports(
+        self, mock_argv, mock_config_class, mock_compressor_class, temp_dir, capsys
+    ):
         """Test main() displays multiple reports message in recursive mode."""
         video_file = temp_dir / "test.mp4"
         video_file.write_bytes(b"0" * 1000)
@@ -393,16 +402,23 @@ class TestCompressyMain:
         mock_argv.__getitem__.side_effect = lambda i: [
             "compressy.py",
             str(temp_dir),
-            "--video-crf", "26",
-            "--video-preset", "fast",
-            "--image-quality", "80",
-            "--image-resize", "90",
+            "--video-crf",
+            "26",
+            "--video-preset",
+            "fast",
+            "--image-quality",
+            "80",
+            "--image-resize",
+            "90",
             "--recursive",
             "--overwrite",
-            "--ffmpeg-path", "/custom/ffmpeg",
-            "--progress-interval", "2.0",
+            "--ffmpeg-path",
+            "/custom/ffmpeg",
+            "--progress-interval",
+            "2.0",
             "--keep-if-larger",
-            "--backup-dir", str(backup_dir),
+            "--backup-dir",
+            str(backup_dir),
             "--preserve-format",
         ][i]
 
@@ -442,7 +458,8 @@ class TestCompressyMain:
         mock_argv.__getitem__.side_effect = lambda i: [
             "compressy.py",
             str(temp_dir),
-            "--ffmpeg-path", "/custom/ffmpeg",
+            "--ffmpeg-path",
+            "/custom/ffmpeg",
         ][i]
 
         mock_config = MagicMock()
@@ -482,7 +499,8 @@ class TestCompressyMain:
         mock_argv.__getitem__.side_effect = lambda i: [
             "compressy.py",
             str(temp_dir),
-            "--backup-dir", str(backup_dir),
+            "--backup-dir",
+            str(backup_dir),
         ][i]
 
         mock_config = MagicMock()
@@ -555,7 +573,9 @@ class TestCompressyMain:
     @patch("compressy.py.MediaCompressor")
     @patch("compressy.py.CompressionConfig")
     @patch("sys.argv")
-    def test_main_statistics_error_with_traceback(self, mock_argv, mock_config_class, mock_compressor_class, temp_dir, capsys):
+    def test_main_statistics_error_with_traceback(
+        self, mock_argv, mock_config_class, mock_compressor_class, temp_dir, capsys
+    ):
         """Test main() prints traceback when statistics update fails."""
         video_file = temp_dir / "test.mp4"
         video_file.write_bytes(b"0" * 1000)
@@ -597,7 +617,9 @@ class TestCompressyMain:
     @patch("compressy.py.MediaCompressor")
     @patch("compressy.py.CompressionConfig")
     @patch("sys.argv")
-    def test_main_successful_compression_returns_zero(self, mock_argv, mock_config_class, mock_compressor_class, temp_dir):
+    def test_main_successful_compression_returns_zero(
+        self, mock_argv, mock_config_class, mock_compressor_class, temp_dir
+    ):
         """Test main() returns 0 on successful compression."""
         video_file = temp_dir / "test.mp4"
         video_file.write_bytes(b"0" * 1000)
@@ -626,4 +648,3 @@ class TestCompressyMain:
             with patch("compressy.py.StatisticsManager"):
                 result = compressy_main.main()
                 assert result == 0
-

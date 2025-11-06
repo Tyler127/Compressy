@@ -396,11 +396,13 @@ class TestStatisticsManager:
                 ],
             )
             writer.writeheader()
-            writer.writerow({
-                "total_runs": "1",
-                "total_files_processed": "10",
-                "format_stats_json": "invalid json {",
-            })
+            writer.writerow(
+                {
+                    "total_runs": "1",
+                    "total_files_processed": "10",
+                    "format_stats_json": "invalid json {",
+                }
+            )
 
         stats = manager.load_cumulative_stats()
         # Should pass through the value as-is (validation happens when used in print_stats)
@@ -422,10 +424,12 @@ class TestStatisticsManager:
                 ],
             )
             writer.writeheader()
-            writer.writerow({
-                "total_runs": "1",
-                "format_stats_json": "",
-            })
+            writer.writerow(
+                {
+                    "total_runs": "1",
+                    "format_stats_json": "",
+                }
+            )
 
         stats = manager.load_cumulative_stats()
         # Empty string is passed through as-is (row.get returns "" if key exists with empty value)
@@ -552,8 +556,9 @@ class TestStatisticsManager:
         assert stats["total_images_processed"] == 3
         assert stats["total_videos_original_size_bytes"] == 700000
         assert stats["total_images_original_size_bytes"] == 300000
-        
+
         import json
+
         format_stats = json.loads(stats["format_stats_json"])
         assert "mp4" in format_stats
         assert format_stats["mp4"]["count"] == 5
@@ -567,16 +572,18 @@ class TestStatisticsManager:
 
         # Use default stats that include all new fields
         stats = manager.load_cumulative_stats()
-        stats.update({
-            "total_runs": 5,
-            "total_files_processed": 100,
-            "total_files_skipped": 10,
-            "total_files_errors": 2,
-            "total_original_size_bytes": 1000000,
-            "total_compressed_size_bytes": 500000,
-            "total_space_saved_bytes": 500000,
-            "last_updated": "2024-01-01 12:00:00",
-        })
+        stats.update(
+            {
+                "total_runs": 5,
+                "total_files_processed": 100,
+                "total_files_skipped": 10,
+                "total_files_errors": 2,
+                "total_original_size_bytes": 1000000,
+                "total_compressed_size_bytes": 500000,
+                "total_space_saved_bytes": 500000,
+                "last_updated": "2024-01-01 12:00:00",
+            }
+        )
 
         manager.save_cumulative_stats(stats)
 
@@ -808,11 +815,13 @@ class TestStatisticsManager:
 
         # Create stats with invalid JSON
         stats = manager.load_cumulative_stats()
-        stats.update({
-            "total_runs": 1,
-            "total_files_processed": 10,
-            "format_stats_json": "invalid json {",
-        })
+        stats.update(
+            {
+                "total_runs": 1,
+                "total_files_processed": 10,
+                "format_stats_json": "invalid json {",
+            }
+        )
         manager.save_cumulative_stats(stats)
 
         manager.print_stats()
@@ -829,20 +838,23 @@ class TestStatisticsManager:
         # Create stats with format_stats_json that will cause TypeError
         # (like a non-string value that can't be parsed)
         stats = manager.load_cumulative_stats()
-        stats.update({
-            "total_runs": 1,
-            "total_files_processed": 10,
-        })
+        stats.update(
+            {
+                "total_runs": 1,
+                "total_files_processed": 10,
+            }
+        )
         manager.save_cumulative_stats(stats)
 
         # Mock json.loads to raise TypeError
         import json
+
         original_loads = json.loads
-        
+
         def mock_loads_raise_typeerror(*args, **kwargs):
             raise TypeError("Invalid type")
-        
-        with patch('compressy.services.statistics.json.loads', side_effect=mock_loads_raise_typeerror):
+
+        with patch("compressy.services.statistics.json.loads", side_effect=mock_loads_raise_typeerror):
             manager.print_stats()
 
         output = capsys.readouterr()
@@ -870,8 +882,11 @@ class TestStatisticsManager:
         output = capsys.readouterr()
         assert "Videos:" in output.out
         # Should not show Images if count is 0
-        output_lines = output.out.split('\n')
-        has_images_line = any("Images:" in line and ("processed" in line or "skipped" in line or "errors" in line) for line in output_lines)
+        output_lines = output.out.split("\n")
+        has_images_line = any(
+            "Images:" in line and ("processed" in line or "skipped" in line or "errors" in line)
+            for line in output_lines
+        )
         assert not has_images_line
 
     def test_print_stats_only_images(self, temp_dir, capsys):

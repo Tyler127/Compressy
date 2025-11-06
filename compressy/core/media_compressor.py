@@ -158,8 +158,8 @@ class MediaCompressor:
             file_type = "image"
         else:
             file_type = None
-        
-        file_extension = file_suffix.lstrip('.') if file_suffix else None
+
+        file_extension = file_suffix.lstrip(".") if file_suffix else None
 
         # Skip if already compressed and not overwriting
         if not self.config.overwrite and out_path.exists():
@@ -221,7 +221,9 @@ class MediaCompressor:
                             "file_extension": file_extension,
                         }
                         self.stats.add_file_info(file_info, folder_key)
-                        self.stats.update_stats(original_size, original_size, 0, "processed", folder_key, file_type, file_extension)
+                        self.stats.update_stats(
+                            original_size, original_size, 0, "processed", folder_key, file_type, file_extension
+                        )
                     else:
                         # In overwrite mode, just skip
                         print(
@@ -234,7 +236,9 @@ class MediaCompressor:
             file_processing_time = time.time() - file_start_time
 
             # Update statistics
-            self.stats.update_stats(original_size, compressed_size, space_saved, "processed", folder_key, file_type, file_extension)
+            self.stats.update_stats(
+                original_size, compressed_size, space_saved, "processed", folder_key, file_type, file_extension
+            )
 
             file_info = {
                 "name": str(file_path.relative_to(self.config.source_folder)),
