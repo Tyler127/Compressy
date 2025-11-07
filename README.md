@@ -56,7 +56,7 @@ A powerful Python command-line tool for compressing videos and images using FFmp
 
 ### Prerequisites
 
-- **Python 3.14**
+- **Python 3.13+**
 - **FFmpeg** (must be installed and accessible in your PATH, or use `--ffmpeg-path`)
 
 #### Installing FFmpeg
@@ -82,20 +82,27 @@ sudo apt-get install ffmpeg
 
 ### Installation
 
-1. Clone the repository:
+#### From PyPI (recommended)
+
+```bash
+pip install compressy
+```
+
+Once installed, the CLI is available immediately:
+
+```bash
+compressy --help
+# or
+python -m compressy --help
+```
+
+#### From source (development)
+
 ```bash
 git clone https://github.com/yourusername/Compressy.git
 cd Compressy
-```
-
-2. Install dependencies:
-```bash
 pip install -r requirements-dev.txt
-```
-
-3. Run compressy:
-```bash
-python compressy.py <source_folder>
+pip install -e .
 ```
 
 ## 📖 Usage
@@ -104,38 +111,40 @@ python compressy.py <source_folder>
 
 ```bash
 # Compress all media files in a folder
-python compressy.py /path/to/media/folder
+compressy /path/to/media/folder
 
 # Compress recursively (all subdirectories)
-python compressy.py /path/to/media/folder --recursive
+compressy /path/to/media/folder --recursive
 
 # Compress and overwrite original files
-python compressy.py /path/to/media/folder --overwrite
+compressy /path/to/media/folder --overwrite
 ```
+
+> 💡 Prefer running `compressy` directly once installed. If you need an explicit interpreter invocation, use `python -m compressy` with the same arguments.
 
 ### Video Compression
 
 ```bash
 # High quality compression (lower CRF = higher quality)
-python compressy.py /path/to/videos --video-crf 18 --video-preset slow
+compressy /path/to/videos --video-crf 18 --video-preset slow
 
 # Faster compression with lower quality
-python compressy.py /path/to/videos --video-crf 28 --video-preset fast
+compressy /path/to/videos --video-crf 28 --video-preset fast
 
 # Custom preset (ultrafast, superfast, veryfast, faster, fast, medium, slow, slower, veryslow)
-python compressy.py /path/to/videos --video-preset slow
+compressy /path/to/videos --video-preset slow
 
 # Resize videos to 90% of original dimensions
-python compressy.py /path/to/videos --video-resize 90
+compressy /path/to/videos --video-resize 90
 
 # Scale videos to specific resolution (720p, 1080p, 1440p, 2160p, 4k, 8k)
-python compressy.py /path/to/videos --video-resolution 1080p
+compressy /path/to/videos --video-resolution 1080p
 
 # Scale videos to custom resolution (WIDTHxHEIGHT)
-python compressy.py /path/to/videos --video-resolution 1920x1080
+compressy /path/to/videos --video-resolution 1920x1080
 
 # Combine quality, resolution, and resize for smaller file sizes
-python compressy.py /path/to/videos --video-crf 24 --video-resolution 720p
+compressy /path/to/videos --video-crf 24 --video-resolution 720p
 ```
 
 **Video CRF Values:**
@@ -148,60 +157,60 @@ python compressy.py /path/to/videos --video-crf 24 --video-resolution 720p
 
 ```bash
 # Compress images with quality setting (0-100, higher = better quality)
-python compressy.py /path/to/images --image-quality 85
+compressy /path/to/images --image-quality 85
 
 # Resize images to 90% of original dimensions
-python compressy.py /path/to/images --image-resize 90
+compressy /path/to/images --image-resize 90
 
 # Combine quality and resize
-python compressy.py /path/to/images --image-quality 80 --image-resize 75
+compressy /path/to/images --image-quality 80 --image-resize 75
 
 # Preserve original image formats (don't convert to JPEG)
-python compressy.py /path/to/images --preserve-format
+compressy /path/to/images --preserve-format
 
 # Convert all images to JPEG for maximum compression (default)
-python compressy.py /path/to/images
+compressy /path/to/images
 ```
 
 ### Advanced Options
 
 ```bash
 # Create a backup before compression
-python compressy.py /path/to/media --backup-dir /path/to/backups
+compressy /path/to/media --backup-dir /path/to/backups
 
 # Use custom FFmpeg path
-python compressy.py /path/to/media --ffmpeg-path /custom/path/to/ffmpeg
+compressy /path/to/media --ffmpeg-path /custom/path/to/ffmpeg
 
 # Keep files even if compression makes them larger
-python compressy.py /path/to/media --keep-if-larger
+compressy /path/to/media --keep-if-larger
 
 # Adjust progress update interval (seconds)
-python compressy.py /path/to/media --progress-interval 2.0
+compressy /path/to/media --progress-interval 2.0
 
 # Output compressed files to custom directory (instead of default 'compressed' folder)
-python compressy.py /path/to/media --output-dir /path/to/output
+compressy /path/to/media --output-dir /path/to/output
 
 # Process only files within a size range (supports B, KB, MB, GB, TB)
-python compressy.py /path/to/media --min-size 1MB --max-size 100MB
+compressy /path/to/media --min-size 1MB --max-size 100MB
 
 # Process only large files (over 10MB)
-python compressy.py /path/to/media --min-size 10MB
+compressy /path/to/media --min-size 10MB
 
 # Process only small files (under 50MB)
-python compressy.py /path/to/media --max-size 50MB
+compressy /path/to/media --max-size 50MB
 ```
 
 ### Viewing Statistics
 
 ```bash
 # View cumulative compression statistics
-python compressy.py --view-stats
+compressy --view-stats
 
 # View run history (all runs)
-python compressy.py --view-history
+compressy --view-history
 
 # View last 5 runs
-python compressy.py --view-history 5
+compressy --view-history 5
 ```
 
 ## 📋 Command-Line Arguments
@@ -247,11 +256,11 @@ Report includes:
 
 ### Statistics
 
-Statistics are stored in `statistics/` directory:
+Statistics are stored per-user in the `~/.compressy/statistics/` directory (`%USERPROFILE%\.compressy\statistics` on Windows):
 - `statistics.csv`: Cumulative statistics across all runs
 - `run_history.csv`: Individual run history
 
-Use `--view-stats` and `--view-history` to view these statistics.
+Use `--view-stats` and `--view-history` to view these statistics from anywhere.
 
 ## 🎯 Examples
 
@@ -259,64 +268,64 @@ Use `--view-stats` and `--view-history` to view these statistics.
 
 ```bash
 # Compress all images in a photo library, resize to 90%, quality 85
-python compressy.py ~/Pictures/Photos --recursive --image-quality 85 --image-resize 90
+compressy ~/Pictures/Photos --recursive --image-quality 85 --image-resize 90
 ```
 
 ### Example 2: Compress videos for web
 
 ```bash
 # Compress videos with good quality for web distribution
-python compressy.py ~/Videos --recursive --video-crf 24 --video-preset fast
+compressy ~/Videos --recursive --video-crf 24 --video-preset fast
 
 # Compress and scale videos to 720p for web (smaller file sizes)
-python compressy.py ~/Videos --recursive --video-crf 24 --video-resolution 720p
+compressy ~/Videos --recursive --video-crf 24 --video-resolution 720p
 
 # Alternative: Compress and resize videos to 75% of original dimensions
-python compressy.py ~/Videos --recursive --video-crf 24 --video-resize 75
+compressy ~/Videos --recursive --video-crf 24 --video-resize 75
 ```
 
 ### Example 3: Backup and compress
 
 ```bash
 # Create backup, then compress with overwrite
-python compressy.py ~/Media --backup-dir ~/Backups/Media --overwrite --recursive
+compressy ~/Media --backup-dir ~/Backups/Media --overwrite --recursive
 ```
 
 ### Example 4: Preserve original formats
 
 ```bash
 # Compress images but keep original formats (PNG, WebP, etc.)
-python compressy.py ~/Images --preserve-format --image-quality 90
+compressy ~/Images --preserve-format --image-quality 90
 ```
 
 ### Example 5: Scale videos to 720p for web
 
 ```bash
 # Compress and scale all videos to 720p resolution
-python compressy.py ~/Videos --recursive --video-resolution 720p --video-crf 24
+compressy ~/Videos --recursive --video-resolution 720p --video-crf 24
 
 # Scale 4K videos down to 1080p with high quality
-python compressy.py ~/Videos/4K --video-resolution 1080p --video-crf 20
+compressy ~/Videos/4K --video-resolution 1080p --video-crf 20
 ```
 
 ### Example 6: Process only large files
 
 ```bash
 # Compress only files larger than 50MB
-python compressy.py ~/Media --recursive --min-size 50MB
+compressy ~/Media --recursive --min-size 50MB
 
 # Compress files between 10MB and 500MB
-python compressy.py ~/Media --recursive --min-size 10MB --max-size 500MB
+compressy ~/Media --recursive --min-size 10MB --max-size 500MB
 ```
 
 ### Example 7: Custom output directory
 
 ```bash
 # Save compressed files to a custom directory instead of 'compressed' folder
-python compressy.py ~/Media --recursive --output-dir ~/CompressedMedia
+compressy ~/Media --recursive --output-dir ~/CompressedMedia
 
 # Combine with other options for complete workflow
-python compressy.py ~/Videos --recursive --output-dir ~/Web/Videos --video-resolution 720p --video-crf 24
+compressy ~/Videos --recursive --output-dir ~/Web/Videos --video-resolution 720p --video-crf 24
 ```
 
 ## 🏗️ Project Structure
@@ -324,9 +333,12 @@ python compressy.py ~/Videos --recursive --output-dir ~/Web/Videos --video-resol
 ```
 Compressy/
 ├── compressy/              # Main package
+│   ├── __init__.py        # Package exports & version
+│   ├── __main__.py        # Enables `python -m compressy`
+│   ├── cli.py             # Console script entry point
 │   ├── core/              # Core compression logic
 │   │   ├── config.py      # Configuration and validation
-│   │   ├── ffmpeg_executor.py  # FFmpeg execution
+│   │   ├── ffmpeg_executor.py  # FFmpeg execution helpers
 │   │   ├── image_compressor.py # Image compression
 │   │   ├── media_compressor.py # Main orchestrator
 │   │   └── video_compressor.py # Video compression
@@ -336,13 +348,26 @@ Compressy/
 │   │   └── statistics.py # Statistics tracking
 │   └── utils/            # Utilities
 │       ├── file_processor.py # File operations
-│       └── format.py     # Size formatting
+│       └── format.py     # Size parsing/formatting helpers
 ├── tests/                 # Test suite
-├── compressy.py          # CLI entry point
+├── compressy.py           # Backwards-compatible script shim
+├── pyproject.toml         # Packaging configuration
+├── CHANGELOG.md           # Release history
 └── README.md             # This file
 ```
 
 ## 🧪 Development
+
+### Local Setup
+
+```bash
+python -m venv .venv
+.\.venv\Scripts\activate  # On Windows
+source .venv/bin/activate   # On macOS/Linux
+
+pip install -r requirements-dev.txt
+pip install -e .
+```
 
 ### Running Tests
 
@@ -369,6 +394,24 @@ flake8 compressy tests
 pylint compressy
 mypy compressy
 ```
+
+### Release Workflow
+
+1. Ensure the version is bumped in both `pyproject.toml` and `compressy/__init__.py`, and document the release in `CHANGELOG.md`.
+2. Run the test and lint commands above.
+3. Build distributions:
+   ```bash
+   python -m build
+   ```
+4. Inspect the artifacts in `dist/` and optionally install locally for smoke testing:
+   ```bash
+   pip install --force-reinstall --no-deps dist/compressy-<version>-py3-none-any.whl
+   compressy --view-stats
+   ```
+5. Publish to PyPI (requires `twine` and credentials):
+   ```bash
+   twine upload dist/*
+   ```
 
 ## 📝 License
 
@@ -405,7 +448,7 @@ ffmpeg -version
 
 # If not found, install FFmpeg (see Prerequisites)
 # Or use --ffmpeg-path to specify custom location
-python compressy.py /path/to/media --ffmpeg-path /path/to/ffmpeg
+compressy /path/to/media --ffmpeg-path /path/to/ffmpeg
 ```
 
 ### Permission errors
