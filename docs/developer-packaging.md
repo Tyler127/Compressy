@@ -79,6 +79,8 @@ These commands are also listed in `README.md` under “Development”.
    ```
 
 3. **Build the package**:
+   
+   Run this from the root directory of the Compressy repository:
    ```powershell
    python -m build
    ```
