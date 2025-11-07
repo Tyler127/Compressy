@@ -2,6 +2,7 @@ name: Security Scanning
 
 on:
   push:
+    branches: [ main, master, develop ]
   pull_request:
     branches: [ main, master, develop ]
   schedule:
@@ -13,6 +14,7 @@ jobs:
   security-scan:
     name: Security Vulnerability Scan
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     
     steps:
     - uses: actions/checkout@v4
