@@ -210,8 +210,8 @@ class MediaCompressor:
             else:
                 raise ValueError(f"Unsupported file type: {file_path.suffix}")
 
-            # Preserve timestamps
-            self.file_processor.preserve_timestamps(in_path, out_path)
+            if self.config.preserve_timestamps:
+                self.file_processor.preserve_timestamps(in_path, out_path)
 
             # Get compressed size
             compressed_size = out_path.stat().st_size
@@ -231,8 +231,11 @@ class MediaCompressor:
 
                     if not self.config.overwrite:
                         # Copy original to compressed folder
-                        shutil.copy2(in_path, out_path)
-                        self.file_processor.preserve_timestamps(in_path, out_path)
+                        if self.config.preserve_timestamps:
+                            shutil.copy2(in_path, out_path)
+                            self.file_processor.preserve_timestamps(in_path, out_path)
+                        else:
+                            shutil.copy(in_path, out_path)
                         print(f"  ⚠️  Compressed file larger, copying original instead: {format_size(original_size)}")
 
                         # Track as processed with no compression

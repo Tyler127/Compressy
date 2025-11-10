@@ -188,6 +188,47 @@ class TestMediaCompressor:
             # Verify video compressor was called
             compressor.video_compressor.compress.assert_called_once()
 
+    def test_process_file_does_not_preserve_timestamps_by_default(self, temp_dir):
+        """Timestamps are not preserved unless explicitly enabled."""
+        config = CompressionConfig(source_folder=temp_dir)
+        with patch("compressy.core.media_compressor.FFmpegExecutor"):
+            compressor = MediaCompressor(config)
+
+            image_file = temp_dir / "test.jpg"
+            image_file.write_bytes(b"0" * 1000)
+
+            def mock_compress(in_path, out_path):
+                out_path.parent.mkdir(parents=True, exist_ok=True)
+                out_path.write_bytes(b"1" * 500)
+
+            compressor.image_compressor.compress = MagicMock(side_effect=mock_compress)
+            compressor.file_processor.preserve_timestamps = MagicMock()
+
+            compressor._process_file(image_file, 1, 1, temp_dir / "compressed")
+
+            compressor.file_processor.preserve_timestamps.assert_not_called()
+
+    def test_process_file_preserves_timestamps_when_enabled(self, temp_dir):
+        """Timestamps are preserved when the flag is enabled."""
+        config = CompressionConfig(source_folder=temp_dir, preserve_timestamps=True)
+        with patch("compressy.core.media_compressor.FFmpegExecutor"):
+            compressor = MediaCompressor(config)
+
+            image_file = temp_dir / "test.jpg"
+            image_file.write_bytes(b"0" * 1000)
+
+            def mock_compress(in_path, out_path):
+                out_path.parent.mkdir(parents=True, exist_ok=True)
+                out_path.write_bytes(b"1" * 500)
+
+            compressor.image_compressor.compress = MagicMock(side_effect=mock_compress)
+            compressor.file_processor.preserve_timestamps = MagicMock()
+
+            compressor._process_file(image_file, 1, 1, temp_dir / "compressed")
+
+            expected_output = temp_dir / "compressed" / "test.jpg"
+            compressor.file_processor.preserve_timestamps.assert_called_once_with(image_file, expected_output)
+
     def test_process_file_skips_existing(self, mock_config, temp_dir, mocker):
         """Test that process_file skips files that already exist."""
         with patch("compressy.core.media_compressor.FFmpegExecutor"):
@@ -430,10 +471,16 @@ class TestMediaCompressor:
             # Should have printed warning about larger file
             compressor.image_compressor.compress.assert_called_once()
 
+    @patch("compressy.core.media_compressor.shutil.copy")
     @patch("compressy.core.media_compressor.shutil.copy2")
-    def test_process_file_larger_not_keep_if_larger_overwrite_false(self, mock_copy2, temp_dir):
+    def test_process_file_larger_not_keep_if_larger_overwrite_false(self, mock_copy2, mock_copy, temp_dir):
         """Test process_file when compressed is larger, keep_if_larger=False, overwrite=False."""
-        config = CompressionConfig(source_folder=temp_dir, keep_if_larger=False, overwrite=False)
+        config = CompressionConfig(
+            source_folder=temp_dir,
+            keep_if_larger=False,
+            overwrite=False,
+            preserve_timestamps=True,
+        )
         with patch("compressy.core.media_compressor.FFmpegExecutor"):
             compressor = MediaCompressor(config)
 
@@ -510,8 +557,81 @@ class TestMediaCompressor:
                     with patch.object(Path, "unlink", mock_unlink):
                         compressor._process_file(image_file, 1, 1, temp_dir / "compressed")
 
-            # Should have copied original (after unlink)
+            # Should have copied original (after unlink) with metadata preserved
             mock_copy2.assert_called_once()
+            mock_copy.assert_not_called()
+
+    @patch("compressy.core.media_compressor.shutil.copy")
+    @patch("compressy.core.media_compressor.shutil.copy2")
+    def test_process_file_larger_not_keep_if_larger_no_preserve_uses_copy(self, mock_copy2, mock_copy, temp_dir):
+        """When not preserving timestamps, fall back to shutil.copy."""
+        config = CompressionConfig(
+            source_folder=temp_dir, keep_if_larger=False, overwrite=False, preserve_timestamps=False
+        )
+        with patch("compressy.core.media_compressor.FFmpegExecutor"):
+            compressor = MediaCompressor(config)
+
+            image_file = temp_dir / "test.jpg"
+            image_file.write_bytes(b"0" * 1000)
+
+            output_file = temp_dir / "compressed" / "test.jpg"
+
+            def mock_compress(in_path, out_path):
+                out_path.parent.mkdir(parents=True, exist_ok=True)
+                out_path.write_bytes(b"0" * 2000)
+
+            compressor.file_processor.preserve_timestamps = MagicMock()
+
+            original_stat = Path.stat
+            original_exists = Path.exists
+            original_unlink = Path.unlink
+
+            compression_done = [False]
+            output_file_exists = [False]
+
+            def mock_stat(self, **kwargs):
+                path_str = str(self)
+                if path_str == str(image_file):
+                    return os.stat_result((0, 0, 0, 0, 0, 0, 1000, 0, 0, 0))
+                if path_str == str(output_file):
+                    if compression_done[0] and output_file_exists[0]:
+                        return os.stat_result((0, 0, 0, 0, 0, 0, 2000, 0, 0, 0))
+                    return os.stat_result((0, 0, 0, 0, 0, 0, 0, 0, 0, 0))
+                return original_stat(self)
+
+            def mock_exists(self):
+                path_str = str(self)
+                if path_str == str(image_file) or path_str == str(temp_dir):
+                    return True
+                if path_str == str(output_file):
+                    return output_file_exists[0]
+                return original_exists(self)
+
+            def mock_unlink(self):
+                if str(self) == str(output_file):
+                    output_file_exists[0] = False
+                    try:
+                        if original_exists(self):
+                            original_unlink(self)
+                    except Exception:
+                        pass
+                else:
+                    original_unlink(self)
+
+            def compress_side_effect(in_path, out_path):
+                mock_compress(in_path, out_path)
+                compression_done[0] = True
+                output_file_exists[0] = True
+
+            compressor.image_compressor.compress = MagicMock(side_effect=compress_side_effect)
+
+            with patch.object(Path, "stat", mock_stat):
+                with patch.object(Path, "exists", mock_exists):
+                    with patch.object(Path, "unlink", mock_unlink):
+                        compressor._process_file(image_file, 1, 1, temp_dir / "compressed")
+
+            mock_copy.assert_called_once_with(image_file, output_file)
+            mock_copy2.assert_not_called()
 
     @patch("compressy.core.media_compressor.shutil.copy2")
     def test_process_file_larger_not_keep_if_larger_overwrite_true(self, mock_copy2, temp_dir):
