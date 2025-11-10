@@ -100,12 +100,11 @@ class CompressyLogger:
         self._logger.setLevel(logging.DEBUG)  # Capture all levels
         self._logger.propagate = False  # Don't propagate to root logger
 
-        # Clear any existing handlers
-        self._logger.handlers.clear()
-
         self._console_handler = None
         self._file_handler = None
         self._log_dir = None
+
+        self._cleanup_handlers()
 
     def configure(
         self,
@@ -133,11 +132,16 @@ class CompressyLogger:
             backup_count: Number of backup files to keep
             when: When to rotate for time-based rotation (e.g., "midnight", "H")
         """
-        # Clear existing handlers
-        self._logger.handlers.clear()
+        self._cleanup_handlers()
+
+        # Reset references
+        self._console_handler = None
+        self._file_handler = None
+        self._log_dir = None
 
         # Set log level
         level = getattr(logging, log_level.upper(), logging.INFO)
+        self._logger.setLevel(level)
 
         # Configure console handler
         if enable_console:
@@ -162,17 +166,26 @@ class CompressyLogger:
             if rotation_enabled:
                 if rotation_type == "size":
                     self._file_handler = RotatingFileHandler(
-                        log_file, maxBytes=max_bytes, backupCount=backup_count, encoding="utf-8"
+                        log_file,
+                        maxBytes=max_bytes,
+                        backupCount=backup_count,
+                        encoding="utf-8",
+                        delay=True,
                     )
                 elif rotation_type == "time":
                     self._file_handler = TimedRotatingFileHandler(
-                        log_file, when=when, backupCount=backup_count, encoding="utf-8"
+                        log_file,
+                        when=when,
+                        backupCount=backup_count,
+                        encoding="utf-8",
+                        delay=True,
                     )
                 else:
                     raise ValueError(f"Invalid rotation_type: {rotation_type}. Must be 'size' or 'time'.")
             else:
-                self._file_handler = logging.FileHandler(log_file, encoding="utf-8")
+                self._file_handler = logging.FileHandler(log_file, encoding="utf-8", delay=True)
 
+            self._enable_auto_release(self._file_handler)
             self._file_handler.setLevel(level)  # File captures all configured levels
             file_formatter = DetailedFormatter(
                 fmt="%(asctime)s [%(levelname)s] [%(location)s] %(message)s", datefmt="%Y-%m-%d %H:%M:%S"
@@ -183,6 +196,45 @@ class CompressyLogger:
     def get_logger(self) -> logging.Logger:
         """Get the underlying logger instance."""
         return self._logger
+
+    def _cleanup_handlers(self) -> None:
+        """Close and remove all handlers from the logger."""
+        handlers = list(self._logger.handlers)
+        for handler in handlers:
+            self._release_handler_stream(handler)
+            try:
+                handler.close()
+            except Exception:
+                pass
+            self._logger.removeHandler(handler)
+
+    @staticmethod
+    def _release_handler_stream(handler: logging.Handler) -> None:
+        """Flush and close handler stream without marking handler as closed."""
+        if not hasattr(handler, "baseFilename"):
+            return
+        stream = getattr(handler, "stream", None)
+        if stream is None:
+            return
+        try:
+            stream.flush()
+        except Exception:
+            pass
+        try:
+            stream.close()
+        except Exception:
+            pass
+        handler.stream = None  # type: ignore[attr-defined]
+
+    def _enable_auto_release(self, handler: logging.Handler) -> None:
+        """Ensure handler releases underlying stream after each emit."""
+        original_emit = handler.emit
+
+        def emit(record: logging.LogRecord, *, _original_emit=original_emit, _handler=handler):
+            _original_emit(record)
+            self._release_handler_stream(_handler)
+
+        handler.emit = emit  # type: ignore[assignment]
 
     # Convenience methods for RFC 5424 severity levels
 
