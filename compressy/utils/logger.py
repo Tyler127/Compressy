@@ -92,7 +92,7 @@ class CompressyLogger:
 
     def __init__(self):
         """Initialize logger (only once)."""
-        if self._initialized:
+        if getattr(self, "_initialized", False):
             return
 
         self._initialized = True
