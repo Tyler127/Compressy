@@ -50,7 +50,7 @@ A powerful Python command-line tool for compressing videos and images using FFmp
 - **💾 Backup Support**: Automatically create backups before compression
 - **⚡ Progress Monitoring**: Real-time progress updates during compression
 - **🛡️ Safe Defaults**: Skip files that would increase in size (unless `--keep-if-larger` is used)
-- **📅 Timestamp Preservation**: Opt-in preservation of original file timestamps via `--preserve-timestamps`
+- **📅 Timestamp Preservation**: Preservation of original file timestamps via `--preserve-timestamps`
 
 ## 🚀 Quick Start
 
@@ -221,7 +221,7 @@ python compressy.py --view-history 5
 | `-r, --recursive` | Process files recursively | False |
 | `--overwrite` | Overwrite original files | False |
 | `--preserve-format` | Preserve original image formats | False |
-| `--preserve-timestamps` | Preserve original file timestamps for outputs | False |
+| `--preserve-timestamps` | Preserve original timestamps for output files | False |
 | `--min-size` | Minimum file size to process (e.g., '1MB', '500KB', '1.5GB') | None |
 | `--max-size` | Maximum file size to process (e.g., '100MB', '1GB', '2.5GB') | None |
 | `--output-dir` | Custom output directory for compressed files (cannot be used with --overwrite) | None |

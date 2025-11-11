@@ -94,7 +94,7 @@ def main():
     parser.add_argument(
         "--preserve-timestamps",
         action="store_true",
-        help="Preserve original file timestamps for compressed outputs (default: disabled)"
+        help="Preserve original timestamps for output files (default: disabled)"
     )
     parser.add_argument(
         "--view-stats",
