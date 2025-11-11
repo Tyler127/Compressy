@@ -514,62 +514,44 @@ class TestMediaCompressor:
 
             image_file = temp_dir / "test.jpg"
             image_file.write_bytes(b"0" * 1000)
-
             output_file = temp_dir / "compressed" / "test.jpg"
+
+            compressor.file_processor.preserve_timestamps = MagicMock()
+
+            # Store original methods
+            original_stat = Path.stat
+            original_exists = Path.exists
+
+            # Track output file state
+            output_created = [False]
 
             def mock_compress(in_path, out_path):
                 out_path.parent.mkdir(parents=True, exist_ok=True)
                 out_path.write_bytes(b"0" * 2000)
-
-            compressor.file_processor.preserve_timestamps = MagicMock()
-
-            original_stat = Path.stat
-            original_exists = Path.exists
-            original_unlink = Path.unlink
-
-            compression_done = [False]
-            output_file_exists = [False]
+                output_created[0] = True
 
             def mock_stat(self, **kwargs):
                 path_str = str(self)
                 if path_str == str(image_file):
                     return os.stat_result((0, 0, 0, 0, 0, 0, 1000, 0, 0, 0))
+                if path_str == str(output_file) and output_created[0]:
+                    return os.stat_result((0, 0, 0, 0, 0, 0, 2000, 0, 0, 0))
                 if path_str == str(output_file):
-                    if compression_done[0] and output_file_exists[0]:
-                        return os.stat_result((0, 0, 0, 0, 0, 0, 2000, 0, 0, 0))
                     return os.stat_result((0, 0, 0, 0, 0, 0, 0, 0, 0, 0))
                 return original_stat(self)
 
             def mock_exists(self):
                 path_str = str(self)
-                if path_str == str(image_file) or path_str == str(temp_dir):
+                if path_str in (str(image_file), str(temp_dir)):
                     return True
                 if path_str == str(output_file):
-                    return output_file_exists[0]
+                    return output_created[0]
                 return original_exists(self)
 
-            def mock_unlink(self):
-                if str(self) == str(output_file):
-                    output_file_exists[0] = False
-                    try:
-                        if original_exists(self):
-                            original_unlink(self)
-                    except Exception:
-                        pass
-                else:
-                    original_unlink(self)
+            compressor.image_compressor.compress = MagicMock(side_effect=mock_compress)
 
-            def compress_side_effect(in_path, out_path):
-                mock_compress(in_path, out_path)
-                compression_done[0] = True
-                output_file_exists[0] = True
-
-            compressor.image_compressor.compress = MagicMock(side_effect=compress_side_effect)
-
-            with patch.object(Path, "stat", mock_stat):
-                with patch.object(Path, "exists", mock_exists):
-                    with patch.object(Path, "unlink", mock_unlink):
-                        compressor._process_file(image_file, 1, 1, temp_dir / "compressed")
+            with patch.object(Path, "stat", mock_stat), patch.object(Path, "exists", mock_exists):
+                compressor._process_file(image_file, 1, 1, temp_dir / "compressed")
 
             mock_copy.assert_called_once_with(image_file, output_file)
             mock_copy2.assert_not_called()
