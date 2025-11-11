@@ -630,9 +630,10 @@ class TestMediaCompressor:
         dummy_file = temp_dir / "video.mp4"
         dummy_file.write_bytes(b"0" * 100)
 
-        with patch.object(compressor, "_collect_files", return_value=[dummy_file]), patch.object(
-            compressor, "_process_file"
-        ) as mock_process:
+        with (
+            patch.object(compressor, "_collect_files", return_value=[dummy_file]),
+            patch.object(compressor, "_process_file") as mock_process,
+        ):
             compressor.compress()
 
         mock_process.assert_called_once()
@@ -650,7 +651,7 @@ class TestMediaCompressor:
         original_stat = Path.stat
 
         def mock_stat(self, *args, **kwargs):
-            if self == error_file:
+            if self == error_file and not kwargs:
                 raise OSError("stat failed")
             return original_stat(self, *args, **kwargs)
 
