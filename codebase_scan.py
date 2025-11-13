@@ -278,6 +278,18 @@ class StatisticsCollector:
         self.overall_stats["total_files"] = len(self.file_stats)
         self.overall_stats["total_directories"] = len(self.directory_stats)
 
+        # Reset cumulative counters before recomputing
+        self.overall_stats["total_lines"] = 0
+        self.overall_stats["python_files"] = 0
+        self.overall_stats["python_total_lines"] = 0
+        self.overall_stats["code_lines"] = 0
+        self.overall_stats["blank_lines"] = 0
+        self.overall_stats["comment_lines"] = 0
+        self.overall_stats["functions"] = 0
+        self.overall_stats["classes"] = 0
+        self.overall_stats["statements"] = 0
+        self.overall_stats["file_types"] = defaultdict(int)
+
         for stats in self.file_stats:
             self.overall_stats["total_lines"] += stats["total_lines"]
             self.overall_stats["file_types"][stats["extension"]] += 1
@@ -312,6 +324,7 @@ class OutputGenerator:
         stats = {
             "total_files": len(files),
             "total_lines": 0,
+            "total_directories": len({str(Path(f["path"]).parent) for f in files}),
             "python_files": 0,
             "python_total_lines": 0,
             "code_lines": 0,
@@ -339,7 +352,41 @@ class OutputGenerator:
 
         return stats
 
-    def generate_tree_structure(self, use_links: bool = False) -> str:
+    @staticmethod
+    def _sanitize_anchor(value: str) -> str:
+        """Create a safe anchor string from a path."""
+        sanitized = value.replace("\\", "-").replace("/", "-")
+        sanitized = re.sub(r"[^a-zA-Z0-9_-]+", "-", sanitized)
+        sanitized = re.sub(r"-+", "-", sanitized).strip("-")
+        return sanitized or "root"
+
+    def _directory_anchor(self, dir_path: str, section_id: str) -> str:
+        """Build an anchor ID for a directory."""
+        normalized = dir_path.replace("\\", "/")
+        sanitized = self._sanitize_anchor(normalized if normalized and normalized != "." else "root")
+        if section_id:
+            return f"dir-{section_id}-{sanitized}"
+        return f"dir-{sanitized}"
+
+    def _file_anchor(self, path: str) -> str:
+        """Build an anchor ID for a file."""
+        normalized = path.replace("\\", "/")
+        sanitized = self._sanitize_anchor(normalized)
+        return f"file-{sanitized}"
+
+    @staticmethod
+    def _determine_section_id(path_parts: List[str]) -> str:
+        """Determine the section id based on the top-level directory."""
+        if not path_parts:
+            return "codebase"
+        first = path_parts[0]
+        if first == "compressy":
+            return "compressy"
+        if first == "tests":
+            return "tests"
+        return "codebase"
+
+    def generate_tree_structure(self, use_links: bool = False, link_format: str = "markdown") -> str:
         """Generate ASCII tree structure of the codebase."""
         lines = []
         root_name = self.root_dir.name
@@ -366,35 +413,41 @@ class OutputGenerator:
             for i, (name, subtree) in enumerate(items):
                 is_last_item = i == len(items) - 1 and len(files) == 0
                 connector = "└── " if is_last_item else "├── "
-                current_path = "/".join(path_parts + [name])
-                
-                if use_links:
-                    # Create anchor link for directory
-                    anchor = f"#{current_path.replace('/', '-').lower()}"
-                    dir_name = f"[{name}/]({anchor})"
+                current_parts = path_parts + [name]
+                current_path = "/".join(current_parts)
+                section_id = self._determine_section_id(current_parts)
+
+                if use_links and section_id:
+                    dir_anchor = self._directory_anchor(current_path, section_id)
+                    if link_format == "html":
+                        dir_name = f'<a href="#{dir_anchor}">{name}/</a>'
+                    else:
+                        dir_name = f"[{name}/](#{dir_anchor})"
                 else:
                     dir_name = f"{name}/"
                 
                 lines.append(f"{prefix}{connector}{dir_name}")
                 new_prefix = prefix + ("    " if is_last_item else "│   ")
-                format_tree(subtree, new_prefix, is_last_item, path_parts + [name])
+                format_tree(subtree, new_prefix, is_last_item, current_parts)
 
             # Add files
             for i, filename in enumerate(files):
                 is_last_file = i == len(files) - 1
                 connector = "└── " if is_last_file else "├── "
-                current_path = "/".join(path_parts + [filename])
-                
+                current_parts = path_parts
                 # Find file stats for additional info
-                file_path = self.root_dir / Path(*path_parts) / filename
+                file_path = self.root_dir / Path(*current_parts) / filename
                 try:
                     rel_path = file_path.relative_to(self.root_dir)
                     file_stat = next((s for s in self.collector.file_stats if s["path"] == rel_path), None)
-                    
-                    if use_links:
-                        # Create anchor link for file
-                        anchor = f"#file-{str(rel_path).replace('/', '-').replace('\\', '-').lower()}"
-                        file_display = f"[{filename}]({anchor})"
+                    section_id = self._determine_section_id(current_parts + [filename])
+
+                    if use_links and section_id:
+                        anchor = self._file_anchor(str(rel_path))
+                        if link_format == "html":
+                            file_display = f'<a href="#{anchor}">{filename}</a>'
+                        else:
+                            file_display = f"[{filename}](#{anchor})"
                     else:
                         file_display = filename
                     
@@ -550,13 +603,22 @@ class OutputGenerator:
         output_file.write_text("\n".join(lines), encoding="utf-8")
         print(f"Text output written to: {output_file}")
 
-    def generate_markdown_file_list(self, files: Optional[List[Dict]] = None, section_id: str = "") -> str:
+    def generate_markdown_file_list(
+        self,
+        files: Optional[List[Dict]] = None,
+        section_id: str = "",
+        title: Optional[str] = None,
+    ) -> str:
         """Generate detailed file listing in markdown format."""
         if files is None:
             files = self.collector.file_stats
             
         lines = []
-        lines.append("## Detailed File Statistics\n")
+        if title:
+            anchor_id = f"{section_id}-details" if section_id else self._sanitize_anchor(title)
+            lines.append(f"## <a id=\"{anchor_id}\"></a>{title}\n")
+        else:
+            lines.append("## Detailed File Statistics\n")
 
         # Group files by directory
         files_by_dir = defaultdict(list)
@@ -568,20 +630,22 @@ class OutputGenerator:
 
         # Sort directories
         for dir_path in sorted(files_by_dir.keys()):
+            normalized_dir = dir_path.replace("\\", "/")
             if dir_path != "root":
-                anchor = f"{section_id}-{dir_path.replace('/', '-').lower()}" if section_id else dir_path.replace('/', '-').lower()
-                lines.append(f"\n### <a id=\"{anchor}\"></a>Directory: `{dir_path}/`\n")
+                anchor = self._directory_anchor(normalized_dir, section_id)
+                lines.append(f"\n### <a id=\"{anchor}\"></a>Directory: `{normalized_dir}/`\n")
             else:
-                anchor = f"{section_id}-root" if section_id else "root"
+                anchor = self._directory_anchor("root", section_id)
                 lines.append(f"\n### <a id=\"{anchor}\"></a>Root Directory\n")
 
             lines.append("| File | Size | Lines | Code | Blank | Comments | Functions | Classes | Statements |")
             lines.append("|------|------|-------|------|-------|----------|-----------|---------|------------|")
 
             for stats in sorted(files_by_dir[dir_path], key=lambda x: x["path"]):
-                file_anchor = f"file-{str(stats['path']).replace('/', '-').replace('\\', '-').lower()}"
-                # Add anchor before the table row (using HTML anchor)
-                file_col = f"[`{stats['path']}`](#{file_anchor})"
+                file_anchor = self._file_anchor(str(stats["path"]))
+                # Add anchor before the table row to support links from the directory tree
+                lines.append(f"<a id=\"{file_anchor}\"></a>")
+                file_col = f"`{stats['path']}`"
                 size_col = f"{stats['size']:,}"
                 total_col = f"{stats['total_lines']:,}"
 
@@ -672,44 +736,118 @@ class OutputGenerator:
 
         return "\n".join(lines)
 
+    def generate_combined_csv(self, sections: List[tuple]) -> str:
+        """Generate a combined CSV summary for all sections."""
+        metrics = [
+            "total_files",
+            "total_directories",
+            "total_lines",
+            "python_files",
+            "python_total_lines",
+            "code_lines",
+            "blank_lines",
+            "comment_lines",
+            "functions",
+            "classes",
+            "statements",
+        ]
+        metric_labels = {
+            "total_files": "Total Files",
+            "total_directories": "Total Directories",
+            "total_lines": "Total Lines (All Files)",
+            "python_files": "Python Files",
+            "python_total_lines": "Python Total Lines",
+            "code_lines": "Python Code Lines",
+            "blank_lines": "Python Blank Lines",
+            "comment_lines": "Python Comment Lines",
+            "functions": "Python Functions",
+            "classes": "Python Classes",
+            "statements": "Python Statements",
+        }
+
+        lines = []
+        lines.append("## Combined CSV Summary\n")
+        lines.append("```csv")
+        lines.append("Section,Metric,Value")
+
+        for section_name, stats in sections:
+            for key in metrics:
+                value = stats.get(key, 0)
+                label = metric_labels[key]
+                lines.append(f"{section_name},{label},{value}")
+
+        lines.append("```")
+        return "\n".join(lines)
+
     def write_markdown_output(self, output_file: Path) -> None:
         """Write markdown output file."""
         lines = []
         lines.append("# Codebase Structure and Statistics\n")
-        lines.append(f"Generated for: `{self.root_dir.name}`\n")
         lines.append("---\n")
 
         # Table of contents
         lines.append("## Table of Contents\n")
         lines.append("- [Codebase Structure](#codebase-structure)")
+        lines.append("- [Entire Codebase Files](#codebase-details)")
         lines.append("- [Compressy Section](#compressy-summary)")
         lines.append("- [Tests Section](#tests-summary)")
+        lines.append("- [Other Files](#other-details)")
         lines.append("- [Overall Summary](#overall-summary)\n")
         lines.append("---\n")
 
         lines.append("## <a id=\"codebase-structure\"></a>Codebase Structure\n")
-        lines.append("```")
-        lines.append(self.generate_tree_structure(use_links=True))
-        lines.append("```\n")
+        lines.append("<pre>")
+        lines.append(self.generate_tree_structure(use_links=True, link_format="html"))
+        lines.append("</pre>\n")
+
+        combined_sections = []
+
+        # Entire codebase file listing (all files)
+        all_files = self.collector.file_stats
+        if all_files:
+            lines.append(self.generate_markdown_file_list(all_files, "codebase", "Entire Codebase Files"))
+            all_stats = self._calculate_section_stats(all_files)
+            lines.append(self.generate_markdown_section_summary(all_stats, "Entire Codebase", "codebase-summary"))
+            lines.append("\n---\n")
+            combined_sections.append(("Entire Codebase", all_stats))
 
         # Compressy section
         compressy_files = self._filter_files_by_prefix("compressy")
         if compressy_files:
-            lines.append(self.generate_markdown_file_list(compressy_files, "compressy"))
+            lines.append(self.generate_markdown_file_list(compressy_files, "compressy", "Compressy Files"))
             compressy_stats = self._calculate_section_stats(compressy_files)
             lines.append(self.generate_markdown_section_summary(compressy_stats, "Compressy", "compressy-summary"))
             lines.append("\n---\n")
+            combined_sections.append(("Compressy", compressy_stats))
 
         # Tests section
         tests_files = self._filter_files_by_prefix("tests")
         if tests_files:
-            lines.append(self.generate_markdown_file_list(tests_files, "tests"))
+            lines.append(self.generate_markdown_file_list(tests_files, "tests", "Tests Files"))
             tests_stats = self._calculate_section_stats(tests_files)
             lines.append(self.generate_markdown_section_summary(tests_stats, "Tests", "tests-summary"))
             lines.append("\n---\n")
+            combined_sections.append(("Tests", tests_stats))
+
+        # Other files (non-compressy/tests)
+        other_files = [
+            s
+            for s in self.collector.file_stats
+            if not str(s["path"]).startswith("compressy") and not str(s["path"]).startswith("tests")
+        ]
+        if other_files:
+            lines.append(self.generate_markdown_file_list(other_files, "other", "Other Files"))
+            other_stats = self._calculate_section_stats(other_files)
+            lines.append(self.generate_markdown_section_summary(other_stats, "Other Files", "other-summary"))
+            lines.append("\n---\n")
+            combined_sections.append(("Other Files", other_stats))
 
         # Overall summary
-        lines.append(self.generate_markdown_summary())
+        overall_summary = self.generate_markdown_summary()
+        lines.append(overall_summary)
+        combined_sections.append(("Overall", self.collector.overall_stats))
+        lines.append("")
+        lines.append(self.generate_combined_csv(combined_sections))
 
         output_file.write_text("\n".join(lines), encoding="utf-8")
         print(f"Markdown output written to: {output_file}")
@@ -763,10 +901,8 @@ def main():
 
     # Generate outputs
     generator = OutputGenerator(root_dir, scanner, collector)
-    text_output = output_dir / "codebase_outline.txt"
     md_output = output_dir / "codebase_outline.md"
 
-    generator.write_text_output(text_output)
     generator.write_markdown_output(md_output)
 
     print("\nScan complete!")
