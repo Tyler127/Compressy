@@ -6,6 +6,7 @@ import logging
 import tempfile
 import threading
 from pathlib import Path
+from unittest.mock import patch
 
 import pytest
 
@@ -408,3 +409,147 @@ def test_get_underlying_logger():
 
     assert isinstance(underlying, logging.Logger)
     assert underlying.name == "compressy"
+
+
+def test_detailed_formatter_exception_info():
+    """Test DetailedFormatter handles exception info correctly."""
+    formatter = DetailedFormatter()
+
+    # Create a record with exc_info but no exc_text
+    try:
+        raise ValueError("test exception")
+    except ValueError:
+        import sys
+
+        record = logging.LogRecord(
+            name="test",
+            level=logging.ERROR,
+            pathname="test.py",
+            lineno=1,
+            msg="Test error",
+            args=(),
+            exc_info=sys.exc_info(),
+        )
+        record.exc_text = None  # Ensure it's None initially
+
+        formatted = formatter.format(record)
+        assert "Test error" in formatted
+        # exc_text should be set by the formatter (line 51)
+        assert record.exc_text is not None
+
+
+def test_detailed_formatter_exception_info_already_set():
+    """Test DetailedFormatter skips setting exc_text if already set."""
+    formatter = DetailedFormatter()
+
+    # Create a record with exc_info and exc_text already set
+    try:
+        raise ValueError("test exception")
+    except ValueError:
+        import sys
+
+        record = logging.LogRecord(
+            name="test",
+            level=logging.ERROR,
+            pathname="test.py",
+            lineno=1,
+            msg="Test error",
+            args=(),
+            exc_info=sys.exc_info(),
+        )
+        record.exc_text = "Already set"  # Set it beforehand
+
+        # Should not overwrite existing exc_text (line 50 condition fails)
+        formatted = formatter.format(record)
+        assert "Test error" in formatted
+        # exc_text should remain as set
+        assert record.exc_text == "Already set"
+
+
+def test_detailed_formatter_sets_exc_text_when_missing():
+    """Test DetailedFormatter sets exc_text from exc_info when exc_text is not set (line 51)."""
+    formatter = DetailedFormatter()
+
+    # Create a record with exc_info but ensure exc_text is not set
+    try:
+        raise RuntimeError("test exception for line 51")
+    except RuntimeError:
+        import sys
+
+        exc_info = sys.exc_info()
+        record = logging.LogRecord(
+            name="test",
+            level=logging.ERROR,
+            pathname="test.py",
+            lineno=1,
+            msg="Test error for coverage",
+            args=(),
+            exc_info=exc_info,
+        )
+
+        # Mock the parent format method to return formatted string but clear exc_text
+        # This simulates a scenario where exc_text is not set, allowing line 51 to execute
+        original_format = logging.Formatter.format
+
+        def mock_parent_format(self, record):
+            # Call parent format but then clear exc_text to test our line 51
+            result = original_format(self, record)
+            # Clear exc_text after parent format so our code at line 51 will set it
+            record.exc_text = None
+            return result
+
+        # Patch the parent format method to clear exc_text after it's set
+        with patch.object(logging.Formatter, "format", mock_parent_format):
+            # This should trigger line 51: record.exc_text = self.formatException(record.exc_info)
+            formatted = formatter.format(record)
+
+            assert "Test error for coverage" in formatted
+            # After formatting, exc_text should be set by line 51
+            assert hasattr(record, "exc_text")
+            assert record.exc_text is not None
+            assert "RuntimeError: test exception for line 51" in record.exc_text
+
+
+def test_logger_handler_close_exception():
+    """Test that logger handles exceptions when closing handlers."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        logger = CompressyLogger()
+        logger.configure(log_level="DEBUG", log_dir=tmpdir, enable_console=False, enable_file=True)
+
+        # Get the file handler
+        handlers = logger._logger.handlers
+        assert len(handlers) > 0
+
+        # Mock close to raise exception
+        with patch.object(handlers[0], "close", side_effect=Exception("Close error")):
+            # Should not raise, just pass silently
+            logger.configure(log_level="INFO", log_dir=tmpdir, enable_console=False, enable_file=True)
+
+
+def test_logger_stream_flush_close_exceptions():
+    """Test that logger handles exceptions when flushing/closing streams."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        logger = CompressyLogger()
+        logger.configure(log_level="DEBUG", log_dir=tmpdir, enable_console=False, enable_file=True)
+
+        # Get the file handler
+        handlers = logger._logger.handlers
+        assert len(handlers) > 0
+        handler = handlers[0]
+
+        # Create a mock handler with a stream that will raise exceptions
+        from unittest.mock import MagicMock
+
+        mock_handler = MagicMock()
+        mock_stream = MagicMock()
+        mock_stream.flush.side_effect = Exception("Flush error")
+        mock_stream.close.side_effect = Exception("Close error")
+        mock_handler.stream = mock_stream
+        mock_handler.baseFilename = "test.log"
+
+        # Should not raise, just pass silently
+        logger._release_handler_stream(mock_handler)
+
+        # Verify exceptions were caught (no exception raised)
+        assert mock_stream.flush.called
+        assert mock_stream.close.called
