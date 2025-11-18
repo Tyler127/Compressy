@@ -407,7 +407,7 @@ class TestStatisticsManager:
         stats_dir = temp_dir / "statistics"
         manager = StatisticsManager(stats_dir)
 
-        # Create empty CSV file
+        # Create empty JSON file
         manager.cumulative_stats_file.touch()
 
         stats = manager.load_cumulative_stats()

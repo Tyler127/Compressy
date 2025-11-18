@@ -87,7 +87,7 @@ class TestReportGenerator:
     def test_get_unique_path_no_conflict(self, temp_dir):
         """Test getting unique path when file doesn't exist."""
         generator = ReportGenerator(temp_dir)
-        base_path = temp_dir / "test_report.csv"
+        base_path = temp_dir / "test_report.json"
 
         unique_path = generator._get_unique_path(base_path)
 
@@ -321,7 +321,7 @@ class TestReportGenerator:
     def test_get_unique_path_no_pattern_match(self, temp_dir):
         """Test _get_unique_path with base name that doesn't match pattern (line 137)."""
         generator = ReportGenerator(temp_dir)
-        base_path = temp_dir / "report.csv"
+        base_path = temp_dir / "report.json"
 
         # Create the file so the code reaches the re.match section
         base_path.touch()
