@@ -28,7 +28,7 @@ class TestStatisticsTracker:
         # Verify new type and format tracking fields exist
         assert tracker.stats["videos_processed"] == 0
         assert tracker.stats["images_processed"] == 0
-        assert tracker.stats["format_stats"] == {}
+        assert tracker.stats["processed_file_format_stats"] == {}
 
     def test_initialization_recursive(self):
         """Test StatisticsTracker initialization in recursive mode."""
@@ -97,11 +97,11 @@ class TestStatisticsTracker:
         assert tracker.stats["videos_original_size"] == 1000
         assert tracker.stats["videos_compressed_size"] == 500
         assert tracker.stats["videos_space_saved"] == 500
-        assert "mp4" in tracker.stats["format_stats"]
-        assert tracker.stats["format_stats"]["mp4"]["count"] == 1
-        assert tracker.stats["format_stats"]["mp4"]["original_size"] == 1000
-        assert tracker.stats["format_stats"]["mp4"]["compressed_size"] == 500
-        assert tracker.stats["format_stats"]["mp4"]["space_saved"] == 500
+        assert "mp4" in tracker.stats["processed_file_format_stats"]
+        assert tracker.stats["processed_file_format_stats"]["mp4"]["count"] == 1
+        assert tracker.stats["processed_file_format_stats"]["mp4"]["original_size"] == 1000
+        assert tracker.stats["processed_file_format_stats"]["mp4"]["compressed_size"] == 500
+        assert tracker.stats["processed_file_format_stats"]["mp4"]["space_saved"] == 500
 
     def test_update_stats_image_with_format(self):
         """Test updating stats for image file with format tracking."""
@@ -114,8 +114,8 @@ class TestStatisticsTracker:
         assert tracker.stats["images_original_size"] == 2000
         assert tracker.stats["images_compressed_size"] == 1500
         assert tracker.stats["images_space_saved"] == 500
-        assert "jpg" in tracker.stats["format_stats"]
-        assert tracker.stats["format_stats"]["jpg"]["count"] == 1
+        assert "jpg" in tracker.stats["processed_file_format_stats"]
+        assert tracker.stats["processed_file_format_stats"]["jpg"]["count"] == 1
 
     def test_update_stats_skipped(self):
         """Test updating stats for skipped file."""
@@ -136,7 +136,7 @@ class TestStatisticsTracker:
         assert tracker.stats["skipped"] == 1
         assert "subdir" in tracker.stats["folder_stats"]
         assert tracker.stats["folder_stats"]["subdir"]["skipped"] == 1
-        assert tracker.stats["folder_stats"]["subdir"]["total_compressed_size"] == 500
+        assert tracker.stats["folder_stats"]["subdir"]["total_compressed_size"] == 1000
 
     def test_update_stats_error(self):
         """Test updating stats for error."""
@@ -182,8 +182,8 @@ class TestStatisticsTracker:
         assert folder_stat["videos_original_size"] == 1000
         assert folder_stat["videos_compressed_size"] == 500
         assert folder_stat["videos_space_saved"] == 500
-        assert "mp4" in folder_stat["format_stats"]
-        assert folder_stat["format_stats"]["mp4"]["count"] == 1
+        assert "mp4" in folder_stat["processed_file_format_stats"]
+        assert folder_stat["processed_file_format_stats"]["mp4"]["count"] == 1
 
     def test_update_stats_recursive_image_with_format(self):
         """Test updating stats in recursive mode with image type and format."""
@@ -209,8 +209,7 @@ class TestStatisticsTracker:
         assert folder_stat["videos_skipped"] == 1
         assert folder_stat["videos_original_size"] == 1000
         assert folder_stat["videos_compressed_size"] == 1000
-        assert "mp4" in folder_stat["format_stats"]
-        assert folder_stat["format_stats"]["mp4"]["count"] == 1
+        assert folder_stat["processed_file_format_stats"] == {}
 
     def test_update_stats_skipped_image_recursive(self):
         """Test updating stats for skipped image in recursive mode."""
@@ -328,7 +327,7 @@ class TestStatisticsManager:
         assert stats["total_original_size_bytes"] == 0
         assert stats["total_compressed_size_bytes"] == 0
         assert stats["total_space_saved_bytes"] == 0
-        assert stats["format_stats"] == {}
+        assert stats["processed_file_format_stats"] == {}
         assert stats["last_updated"] is None
 
     def test_load_cumulative_stats_file_exists(self, temp_dir):
@@ -347,7 +346,7 @@ class TestStatisticsManager:
             "total_space_saved_bytes": 500000,
             "total_videos_processed": 50,
             "total_images_processed": 50,
-            "format_stats": {
+            "processed_file_format_stats": {
                 "mp4": {"count": 10, "original_size": 500000, "compressed_size": 250000, "space_saved": 250000}
             },
             "last_updated": "2024-01-01 12:00:00",
@@ -368,7 +367,7 @@ class TestStatisticsManager:
         assert stats["last_updated"] == "2024-01-01 12:00:00"
         assert stats["total_videos_processed"] == 50
         assert stats["total_images_processed"] == 50
-        assert "mp4" in stats["format_stats"]
+        assert "mp4" in stats["processed_file_format_stats"]
 
     def test_load_cumulative_stats_with_invalid_json(self, temp_dir):
         """Test loading cumulative stats with invalid JSON file."""
@@ -382,7 +381,7 @@ class TestStatisticsManager:
         stats = manager.load_cumulative_stats()
         # Should return defaults when JSON is invalid
         assert stats["total_runs"] == 0
-        assert stats["format_stats"] == {}
+        assert stats["processed_file_format_stats"] == {}
 
     def test_load_cumulative_stats_with_missing_fields(self, temp_dir):
         """Test loading cumulative stats with missing fields."""
@@ -400,7 +399,7 @@ class TestStatisticsManager:
         stats = manager.load_cumulative_stats()
         # Should fill in missing fields with defaults
         assert stats["total_runs"] == 1
-        assert stats["format_stats"] == {}
+        assert stats["processed_file_format_stats"] == {}
         assert stats["total_files_processed"] == 0
 
     def test_load_cumulative_stats_empty_file(self, temp_dir):
@@ -495,7 +494,7 @@ class TestStatisticsManager:
             "images_original_size": 300000,
             "images_compressed_size": 150000,
             "images_space_saved": 150000,
-            "format_stats": {
+            "processed_file_format_stats": {
                 "mp4": {"count": 5, "original_size": 500000, "compressed_size": 250000, "space_saved": 250000},
                 "jpg": {"count": 3, "original_size": 300000, "compressed_size": 150000, "space_saved": 150000},
             },
@@ -510,7 +509,7 @@ class TestStatisticsManager:
         assert stats["total_videos_original_size_bytes"] == 700000
         assert stats["total_images_original_size_bytes"] == 300000
 
-        format_stats = stats["format_stats"]
+        format_stats = stats["processed_file_format_stats"]
         assert "mp4" in format_stats
         assert format_stats["mp4"]["count"] == 5
         assert "jpg" in format_stats
@@ -757,7 +756,7 @@ class TestStatisticsManager:
 
         run_stats = {
             "processed": 10,
-            "format_stats": {
+            "processed_file_format_stats": {
                 "mp4": {"count": 5, "original_size": 500000, "compressed_size": 250000, "space_saved": 250000},
                 "jpg": {"count": 3, "original_size": 300000, "compressed_size": 150000, "space_saved": 150000},
                 "png": {"count": 2, "original_size": 200000, "compressed_size": 100000, "space_saved": 100000},
@@ -785,7 +784,7 @@ class TestStatisticsManager:
             "total_original_size": 0,
             "total_compressed_size": 0,
             "space_saved": 0,
-            "format_stats": {
+            "processed_file_format_stats": {
                 "mp4": {"count": 0, "original_size": 0, "compressed_size": 0, "space_saved": 0},
                 "jpg": {"count": 0, "original_size": 0, "compressed_size": 0, "space_saved": 0},
             },
@@ -808,7 +807,7 @@ class TestStatisticsManager:
             {
                 "total_runs": 1,
                 "total_files_processed": 10,
-                "format_stats": {
+                "processed_file_format_stats": {
                     "mp4": {"count": 5, "original_size": 500000, "compressed_size": 250000, "space_saved": 250000},
                     "jpg": {"count": 3, "original_size": 300000, "compressed_size": 150000, "space_saved": 150000},
                 },

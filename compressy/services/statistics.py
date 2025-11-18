@@ -44,8 +44,8 @@ class StatisticsTracker:
             "images_original_size": 0,
             "images_compressed_size": 0,
             "images_space_saved": 0,
-            # Format-level statistics
-            "format_stats": {},
+            # Format-level statistics (processed files only)
+            "processed_file_format_stats": {},
         }
 
         if recursive:
@@ -77,7 +77,7 @@ class StatisticsTracker:
                 "images_compressed_size": 0,
                 "images_space_saved": 0,
                 # Format-level statistics
-                "format_stats": {},
+                "processed_file_format_stats": {},
             }
 
     def add_file_info(self, file_info: Dict, folder_key: str = "root") -> None:
@@ -95,7 +95,7 @@ class StatisticsTracker:
             self.stats["folder_stats"][folder_key]["files"].append(file_info)
 
     def _initialize_format_stats(self, format_stats: Dict, extension: str) -> None:
-        """Initialize format statistics for a given extension if not exists."""
+        """Initialize processed format statistics for a given extension if not exists."""
         if extension not in format_stats:
             format_stats[extension] = {
                 "count": 0,
@@ -126,9 +126,8 @@ class StatisticsTracker:
             file_type: File type ("video" or "image")
             file_extension: File extension without dot (e.g., "mp4", "jpg")
         """
-        if status in {"processed", "skipped"}:
+        if status == "processed":
             self._apply_format_stats(
-                status,
                 file_extension,
                 original_size,
                 compressed_size,
@@ -148,7 +147,7 @@ class StatisticsTracker:
         elif status == "skipped":
             self._record_skipped(
                 original_size,
-                compressed_size,
+                original_size,
                 folder_key,
                 file_type,
             )
@@ -157,7 +156,6 @@ class StatisticsTracker:
 
     def _apply_format_stats(
         self,
-        status: str,
         file_extension: Optional[str],
         original_size: int,
         compressed_size: int,
@@ -170,7 +168,6 @@ class StatisticsTracker:
         self._update_format_stats_for_container(
             self.stats,
             file_extension,
-            status,
             original_size,
             compressed_size,
             space_saved,
@@ -181,7 +178,6 @@ class StatisticsTracker:
             self._update_format_stats_for_container(
                 folder_stat,
                 file_extension,
-                status,
                 original_size,
                 compressed_size,
                 space_saved,
@@ -191,18 +187,16 @@ class StatisticsTracker:
         self,
         container: Dict,
         file_extension: str,
-        status: str,
         original_size: int,
         compressed_size: int,
         space_saved: int,
     ) -> None:
-        self._initialize_format_stats(container["format_stats"], file_extension)
-        stats = container["format_stats"][file_extension]
+        self._initialize_format_stats(container["processed_file_format_stats"], file_extension)
+        stats = container["processed_file_format_stats"][file_extension]
         stats["count"] += 1
         stats["original_size"] += original_size
         stats["compressed_size"] += compressed_size
-        if status == "processed":
-            stats["space_saved"] += space_saved
+        stats["space_saved"] += space_saved
 
     def _record_processed(
         self,
@@ -362,7 +356,7 @@ class StatisticsManager:
             "total_images_compressed_size_bytes": 0,
             "total_images_space_saved_bytes": 0,
             # Format statistics (stored as nested dict)
-            "format_stats": {},
+            "processed_file_format_stats": {},
             "last_updated": None,
         }
 
@@ -420,8 +414,8 @@ class StatisticsManager:
         cumulative["total_images_space_saved_bytes"] += run_stats.get("images_space_saved", 0)
 
         # Update format statistics (now stored as nested dict)
-        run_format_stats = run_stats.get("format_stats", {})
-        cumulative_format_stats = cumulative.get("format_stats", {})
+        run_format_stats = run_stats.get("processed_file_format_stats", {})
+        cumulative_format_stats = cumulative.get("processed_file_format_stats", {})
 
         for format_ext, format_data in run_format_stats.items():
             if format_ext not in cumulative_format_stats:
@@ -436,7 +430,7 @@ class StatisticsManager:
             cumulative_format_stats[format_ext]["compressed_size"] += format_data.get("compressed_size", 0)
             cumulative_format_stats[format_ext]["space_saved"] += format_data.get("space_saved", 0)
 
-        cumulative["format_stats"] = cumulative_format_stats
+        cumulative["processed_file_format_stats"] = cumulative_format_stats
         cumulative["last_updated"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
         self.save_cumulative_stats(cumulative)
@@ -553,7 +547,7 @@ class StatisticsManager:
 
     def _print_format_breakdown(self, stats: Dict) -> None:
         # Format-level breakdown (only show formats with count > 0)
-        format_stats = stats.get("format_stats", {})
+        format_stats = stats.get("processed_file_format_stats", {})
         if not format_stats:
             return
 
@@ -794,7 +788,7 @@ class StatisticsManager:
                     "images_original_size_bytes": run_stats.get("images_original_size", 0),
                     "images_compressed_size_bytes": run_stats.get("images_compressed_size", 0),
                     "images_space_saved_bytes": run_stats.get("images_space_saved", 0),
-                    "format_stats": run_stats.get("format_stats", {}),
+                    "processed_file_format_stats": run_stats.get("processed_file_format_stats", {}),
                     "processing_time_seconds": run_stats.get("total_processing_time", 0.0),
                 }
                 files_log[timestamp]["stats"] = stats
