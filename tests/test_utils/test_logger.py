@@ -535,7 +535,6 @@ def test_logger_stream_flush_close_exceptions():
         # Get the file handler
         handlers = logger._logger.handlers
         assert len(handlers) > 0
-        handler = handlers[0]
 
         # Create a mock handler with a stream that will raise exceptions
         from unittest.mock import MagicMock

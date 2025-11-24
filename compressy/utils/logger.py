@@ -204,8 +204,9 @@ class CompressyLogger:
             self._release_handler_stream(handler)
             try:
                 handler.close()
-            except Exception:
-                pass
+            except Exception as e:
+                # Log at debug level - cleanup failures are non-critical
+                self._logger.debug(f"Error closing handler: {e}", exc_info=True)
             self._logger.removeHandler(handler)
 
     @staticmethod
@@ -218,12 +219,14 @@ class CompressyLogger:
             return
         try:
             stream.flush()
-        except Exception:
-            pass
+        except Exception as e:
+            # Log at debug level - stream flush failures during cleanup are non-critical
+            logging.getLogger("compressy").debug(f"Error flushing stream: {e}", exc_info=True)
         try:
             stream.close()
-        except Exception:
-            pass
+        except Exception as e:
+            # Log at debug level - stream close failures during cleanup are non-critical
+            logging.getLogger("compressy").debug(f"Error closing stream: {e}", exc_info=True)
         handler.stream = None  # type: ignore[attr-defined]
 
     def _enable_auto_release(self, handler: logging.Handler) -> None:
