@@ -229,8 +229,8 @@ class TestMediaCompressor:
             expected_output = temp_dir / "compressed" / "test.jpg"
             compressor.file_processor.preserve_timestamps.assert_called_once_with(image_file, expected_output)
 
-    def test_process_file_skips_existing(self, mock_config, temp_dir, mocker):
-        """Test that process_file skips files that already exist."""
+    def test_process_file_tracks_existing_as_processed(self, mock_config, temp_dir, mocker):
+        """Test that process_file tracks already-compressed files as processed, not skipped."""
         with patch("compressy.core.media_compressor.FFmpegExecutor"):
             # Don't mock FileProcessor - use real one
             compressor = MediaCompressor(mock_config)
@@ -278,6 +278,14 @@ class TestMediaCompressor:
 
             # Should not call image compressor
             compressor.image_compressor.compress.assert_not_called()
+
+            # Should be tracked as processed (already compressed), not skipped
+            stats = compressor.stats.get_stats()
+            assert stats["processed"] == 1
+            assert stats["skipped"] == 0
+            assert stats["total_original_size"] == 1000
+            assert stats["total_compressed_size"] == 500
+            assert stats["space_saved"] == 500
 
     def test_process_file_converts_to_jpeg(self, temp_dir):
         """Test that process_file converts images to JPEG when preserve_format=False (line 147)."""
@@ -840,6 +848,35 @@ class TestMediaCompressor:
         file_names = {f.name for f in files}
         assert "video1.mp4" in file_names
         assert "compressed1.mp4" in file_names
+
+    def test_exclude_compressed_folder_files_excludes_compressed_only(self, temp_dir):
+        """Test that files in compressed folder are excluded, but source files go through processing."""
+        config = CompressionConfig(source_folder=temp_dir, recursive=True)
+        with patch("compressy.core.media_compressor.FFmpegExecutor"):
+            compressor = MediaCompressor(config)
+
+        # Create source file (100MB)
+        source_file = temp_dir / "video.mp4"
+        source_file.write_bytes(b"0" * (100 * 1024 * 1024))
+
+        # Create compressed file (50MB) - simulating already compressed
+        compressed_dir = temp_dir / "compressed"
+        compressed_dir.mkdir()
+        compressed_file = compressed_dir / "video.mp4"
+        compressed_file.write_bytes(b"0" * (50 * 1024 * 1024))
+
+        # Collect files - compressed file should be excluded, source file should be included
+        files = compressor._collect_files(compressed_dir)
+
+        # Source file should be in files (will be processed/skipped later)
+        # Compressed file should be excluded
+        assert source_file in files
+        assert compressed_file not in files
+
+        # At this point, no stats should be tracked yet (stats tracked during processing)
+        stats = compressor.stats.get_stats()
+        assert stats["skipped"] == 0
+        assert stats["total_original_size"] == 0
 
     def test_gather_media_files_non_recursive(self, mock_config, temp_dir):
         """Test _gather_media_files in non-recursive mode."""

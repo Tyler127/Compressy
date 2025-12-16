@@ -127,6 +127,8 @@ class MediaCompressor:
     def _exclude_compressed_folder_files(self, files: List[Path], compressed_folder: Optional[Path]) -> List[Path]:
         """
         Exclude files that are inside the compressed folder.
+        Files in compressed directory are excluded completely (no stats tracking).
+        Source files are allowed through normal processing where they will be skipped if output exists.
 
         Args:
             files: List of file paths to filter
@@ -140,6 +142,8 @@ class MediaCompressor:
 
         try:
             compressed_folder_abs = compressed_folder.resolve()
+            # Simply exclude files in compressed folder - don't track stats here
+            # Source files will go through normal processing and be handled by _should_skip_existing
             return [f for f in files if not self._is_file_in_folder(f, compressed_folder_abs)]
         except (OSError, ValueError):
             # If compressed folder path resolution fails, continue without exclusion
@@ -356,8 +360,35 @@ class MediaCompressor:
             return False
 
         existing_size = out_path.stat().st_size
-        self.stats.update_stats(original_size, existing_size, 0, "skipped", folder_key, file_type, file_extension)
-        print(f"[{idx}/{total_files}] Skipping (already exists): {file_path.name} ({format_size(existing_size)})")
+
+        # Calculate actual compression metrics
+        space_saved = original_size - existing_size
+        compression_ratio = (space_saved / original_size * 100) if original_size > 0 else 0
+
+        # Track as "processed" because file was already compressed in a previous run
+        # This is not a logical skip, but an already-compressed file
+        self.stats.update_stats(
+            original_size, existing_size, space_saved, "processed", folder_key, file_type, file_extension
+        )
+
+        # Add file info to statistics
+        file_info = self._build_file_info(
+            file_path,
+            original_size,
+            existing_size,
+            space_saved,
+            compression_ratio,
+            0.0,  # No processing time for already compressed files
+            "success (already compressed)",
+            file_type,
+            file_extension,
+        )
+        self.stats.add_file_info(file_info, folder_key)
+
+        print(
+            f"[{idx}/{total_files}] Already compressed: {file_path.name} "
+            f"({format_size(original_size)} → {format_size(existing_size)}, {compression_ratio:.1f}% reduction)"
+        )
         return True
 
     def _compress_by_type(self, file_type: str, in_path: Path, out_path: Path) -> None:
