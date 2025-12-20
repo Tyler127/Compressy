@@ -147,7 +147,8 @@ class StatisticsTracker:
         elif status == "skipped":
             self._record_skipped(
                 original_size,
-                original_size,
+                compressed_size,
+                space_saved,
                 folder_key,
                 file_type,
             )
@@ -223,18 +224,21 @@ class StatisticsTracker:
         self,
         original_size: int,
         compressed_size: int,
+        space_saved: int,
         folder_key: str,
         file_type: Optional[str],
     ) -> None:
         self.stats["skipped"] += 1
         self.stats["total_compressed_size"] += compressed_size
-        self._update_type_totals(self.stats, file_type, "skipped", original_size, compressed_size, 0)
+        self.stats["space_saved"] += space_saved
+        self._update_type_totals(self.stats, file_type, "skipped", original_size, compressed_size, space_saved)
 
         if self.recursive:
             folder_stat = self._get_folder_stats(folder_key)
             folder_stat["skipped"] += 1
             folder_stat["total_compressed_size"] += compressed_size
-            self._update_type_totals(folder_stat, file_type, "skipped", original_size, compressed_size, 0)
+            folder_stat["space_saved"] += space_saved
+            self._update_type_totals(folder_stat, file_type, "skipped", original_size, compressed_size, space_saved)
 
     def _record_error(self, folder_key: str, file_type: Optional[str]) -> None:
         self.stats["errors"] += 1
