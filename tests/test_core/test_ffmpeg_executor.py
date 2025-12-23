@@ -145,7 +145,7 @@ class TestFFmpegExecutor:
             "frame= 100 fps= 25.0 time=00:00:10.00\n",
             "",  # EOF
         ]
-        mock_process.communicate.return_value = (b"", b"")
+        mock_process.communicate.return_value = ("", "")
         mock_process.returncode = 0
         mock_popen.return_value = mock_process
 
@@ -169,7 +169,7 @@ class TestFFmpegExecutor:
         mock_process = MagicMock()
         mock_process.poll.return_value = 1  # Error exit code
         mock_process.stderr.readline.return_value = ""
-        # Return error message as string (not bytes) since universal_newlines=True
+        # Return error message as string (not bytes) since text mode is enabled
         mock_process.communicate.return_value = ("", "FFmpeg error")
         mock_process.returncode = 1
         mock_popen.return_value = mock_process
@@ -193,7 +193,7 @@ class TestFFmpegExecutor:
             "frame=  100 fps= 25.0 time=00:00:10.00 bitrate= 800.0kbits/s speed=1.0x\n",
             "",  # EOF
         ]
-        mock_process.communicate.return_value = (b"", b"")
+        mock_process.communicate.return_value = ("", "")
         mock_process.returncode = 0
         mock_popen.return_value = mock_process
 
@@ -241,6 +241,21 @@ class TestFFmpegExecutor:
         assert result is None
 
     @patch("compressy.core.ffmpeg_executor.subprocess.Popen")
+    def test_launch_process_uses_utf8_replace(self, mock_popen):
+        """Ensure ffmpeg launches with UTF-8 decoding and replacement errors."""
+        executor = FFmpegExecutor(ffmpeg_path="/fake/ffmpeg")
+
+        executor._launch_process(["/fake/ffmpeg", "-version"])
+
+        mock_popen.assert_called_once()
+        kwargs = mock_popen.call_args.kwargs
+        assert kwargs["text"] is True
+        assert kwargs["encoding"] == "utf-8"
+        assert kwargs["errors"] == "replace"
+        assert kwargs["stdout"] == subprocess.PIPE
+        assert kwargs["stderr"] == subprocess.PIPE
+
+    @patch("compressy.core.ffmpeg_executor.subprocess.Popen")
     @patch("compressy.core.ffmpeg_executor.time.time")
     @patch("compressy.core.ffmpeg_executor.time.sleep")
     def test_run_with_progress_includes_size(self, mock_sleep, mock_time, mock_popen, capsys):
@@ -254,7 +269,7 @@ class TestFFmpegExecutor:
             "frame=  100 fps= 25.0 time=00:00:10.00 bitrate= 800.0kbits/s size=  1024kB speed=1.0x\n",
             "",  # EOF
         ]
-        mock_process.communicate.return_value = (b"", b"")
+        mock_process.communicate.return_value = ("", "")
         mock_process.returncode = 0
         mock_popen.return_value = mock_process
 
@@ -280,7 +295,7 @@ class TestFFmpegExecutor:
             "frame=  50 fps= 24.0 time=00:00:05.00\n",
             "",  # EOF
         ]
-        # Final progress in communicate() stderr (as string since universal_newlines=True)
+        # Final progress in communicate() stderr (as string since text mode is enabled)
         mock_process.communicate.return_value = (
             "",
             "frame=  100 fps= 25.0 time=00:00:10.00\n",
