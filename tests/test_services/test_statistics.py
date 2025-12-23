@@ -128,15 +128,17 @@ class TestStatisticsTracker:
         assert tracker.stats["space_saved"] == 0
 
     def test_update_stats_skipped_recursive(self):
-        """Test updating stats for skipped files in recursive mode (lines 102-104)."""
+        """Test updating stats for skipped files in recursive mode."""
         tracker = StatisticsTracker(recursive=True)
 
-        tracker.update_stats(1000, 500, 0, "skipped", folder_key="subdir")
+        # Now skipped files track actual compressed_size and space_saved
+        tracker.update_stats(1000, 500, 500, "skipped", folder_key="subdir")
 
         assert tracker.stats["skipped"] == 1
         assert "subdir" in tracker.stats["folder_stats"]
         assert tracker.stats["folder_stats"]["subdir"]["skipped"] == 1
-        assert tracker.stats["folder_stats"]["subdir"]["total_compressed_size"] == 1000
+        assert tracker.stats["folder_stats"]["subdir"]["total_compressed_size"] == 500
+        assert tracker.stats["folder_stats"]["subdir"]["space_saved"] == 500
 
     def test_update_stats_error(self):
         """Test updating stats for error."""
