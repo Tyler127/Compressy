@@ -2,6 +2,10 @@ import json
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, Optional
+from compressy.core.resource_limiter import (
+    VALID_IO_PRIORITIES,
+    VALID_PROCESS_PRIORITIES,
+)
 
 
 # ============================================================================
@@ -116,6 +120,10 @@ class CompressionConfig:
     output_dir: Optional[Path] = None
     video_resolution: Optional[str] = None
     auto_rename_duplicates: bool = True
+    ffmpeg_threads: Optional[int] = None
+    ffmpeg_process_priority: Optional[str] = None
+    ffmpeg_io_priority: Optional[str] = None
+    cooldown_seconds: float = 0.0
 
 
 # ============================================================================
@@ -138,6 +146,10 @@ class ParameterValidator:
         ParameterValidator.validate_output_dir(config.output_dir, config.overwrite, config.source_folder)
         ParameterValidator.validate_video_resolution(config.video_resolution)
         ParameterValidator.validate_video_resize_and_resolution(config.video_resize, config.video_resolution)
+        ParameterValidator.validate_ffmpeg_threads(config.ffmpeg_threads)
+        ParameterValidator.validate_ffmpeg_process_priority(config.ffmpeg_process_priority)
+        ParameterValidator.validate_ffmpeg_io_priority(config.ffmpeg_io_priority)
+        ParameterValidator.validate_cooldown_seconds(config.cooldown_seconds)
 
     @staticmethod
     def validate_video_crf(video_crf: int) -> None:
@@ -220,3 +232,52 @@ class ParameterValidator:
                 "Cannot use --video-resize and --video-resolution together. "
                 "Choose one: use --video-resize for proportional scaling or --video-resolution for fixed dimensions."
             )
+
+    @staticmethod
+    def validate_ffmpeg_threads(ffmpeg_threads: Optional[int]) -> None:
+        """Validate FFmpeg thread count.
+
+        ``None`` means "do not pass ``-threads``" and keeps the default
+        FFmpeg behavior. A value of ``0`` is the FFmpeg-recognized "auto"
+        signal. Positive integers cap concurrent encode threads.
+        """
+        if ffmpeg_threads is None:
+            return
+        if not isinstance(ffmpeg_threads, int) or isinstance(ffmpeg_threads, bool):
+            raise ValueError(f"ffmpeg_threads must be an integer, got {type(ffmpeg_threads).__name__}")
+        if ffmpeg_threads < 0:
+            raise ValueError(f"ffmpeg_threads must be non-negative (0 = auto), got {ffmpeg_threads}")
+        if ffmpeg_threads > 64:
+            raise ValueError(f"ffmpeg_threads must be 64 or fewer to avoid runaway thread counts, got {ffmpeg_threads}")
+
+    @staticmethod
+    def validate_ffmpeg_process_priority(process_priority: Optional[str]) -> None:
+        """Validate FFmpeg process priority value."""
+        if process_priority is None:
+            return
+        if process_priority not in VALID_PROCESS_PRIORITIES:
+            raise ValueError(
+                f"ffmpeg_process_priority must be one of {list(VALID_PROCESS_PRIORITIES)}, got {process_priority}"
+            )
+
+    @staticmethod
+    def validate_ffmpeg_io_priority(io_priority: Optional[str]) -> None:
+        """Validate FFmpeg I/O priority value."""
+        if io_priority is None:
+            return
+        if io_priority not in VALID_IO_PRIORITIES:
+            raise ValueError(
+                f"ffmpeg_io_priority must be one of {list(VALID_IO_PRIORITIES)}, got {io_priority}"
+            )
+
+    @staticmethod
+    def validate_cooldown_seconds(cooldown_seconds: float) -> None:
+        """Validate cooldown delay between files."""
+        if cooldown_seconds is None:
+            raise ValueError("cooldown_seconds must be a number, got None")
+        if isinstance(cooldown_seconds, bool):
+            raise ValueError(f"cooldown_seconds must be a number, got {type(cooldown_seconds).__name__}")
+        if not isinstance(cooldown_seconds, (int, float)):
+            raise ValueError(f"cooldown_seconds must be a number, got {type(cooldown_seconds).__name__}")
+        if cooldown_seconds < 0:
+            raise ValueError(f"cooldown_seconds must be non-negative, got {cooldown_seconds}")

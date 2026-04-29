@@ -163,7 +163,47 @@ def main():
         default=None,
         help="Target video resolution (e.g., '1920x1080', '720p', '1080p', '4k')"
     )
-    
+    parser.add_argument(
+        "--ffmpeg-threads",
+        type=int,
+        default=None,
+        metavar="N",
+        help=(
+            "Cap the number of CPU threads FFmpeg may use per file via '-threads N'. "
+            "Use 0 to let FFmpeg auto-detect, or 1-64 to throttle CPU pressure (default: unset)."
+        ),
+    )
+    parser.add_argument(
+        "--ffmpeg-process-priority",
+        type=str,
+        default=None,
+        choices=["low", "below_normal", "normal", "above_normal", "high"],
+        help=(
+            "OS scheduling priority for each FFmpeg process. 'low'/'below_normal' help "
+            "keep the system responsive while compressing (default: unset)."
+        ),
+    )
+    parser.add_argument(
+        "--ffmpeg-io-priority",
+        type=str,
+        default=None,
+        choices=["idle", "low", "normal", "high"],
+        help=(
+            "I/O priority for FFmpeg child processes. Best-effort: applied via background "
+            "mode on Windows and 'ionice' on Linux; ignored where unsupported (default: unset)."
+        ),
+    )
+    parser.add_argument(
+        "--cooldown-seconds",
+        type=float,
+        default=0.0,
+        metavar="SECONDS",
+        help=(
+            "Sleep this many seconds between files to let the system recover. "
+            "Useful when sustained load causes thermal/driver issues (default: 0)."
+        ),
+    )
+
     args = parser.parse_args()
     
     # Initialize logging early
@@ -261,7 +301,11 @@ def main():
             min_size=min_size,
             max_size=max_size,
             output_dir=Path(args.output_dir) if args.output_dir else None,
-            video_resolution=args.video_resolution
+            video_resolution=args.video_resolution,
+            ffmpeg_threads=args.ffmpeg_threads,
+            ffmpeg_process_priority=args.ffmpeg_process_priority,
+            ffmpeg_io_priority=args.ffmpeg_io_priority,
+            cooldown_seconds=args.cooldown_seconds,
         )
         
         # Compress media
@@ -299,6 +343,14 @@ def main():
             cmd_args['output_dir'] = args.output_dir
         if args.video_resolution:
             cmd_args['video_resolution'] = args.video_resolution
+        if args.ffmpeg_threads is not None:
+            cmd_args['ffmpeg_threads'] = args.ffmpeg_threads
+        if args.ffmpeg_process_priority:
+            cmd_args['ffmpeg_process_priority'] = args.ffmpeg_process_priority
+        if args.ffmpeg_io_priority:
+            cmd_args['ffmpeg_io_priority'] = args.ffmpeg_io_priority
+        if args.cooldown_seconds:
+            cmd_args['cooldown_seconds'] = args.cooldown_seconds
         
         report_generator = ReportGenerator(Path.cwd())
         report_paths = report_generator.generate(stats, compressed_folder_name, recursive=args.recursive, cmd_args=cmd_args, run_uuid=run_uuid)

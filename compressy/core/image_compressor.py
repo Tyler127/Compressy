@@ -67,6 +67,9 @@ class ImageCompressor:
         elif self.config.preserve_format:
             ffmpeg_args.extend(self._preserve_format_args(input_ext))
 
+        if self.config.ffmpeg_threads is not None:
+            ffmpeg_args.extend(["-threads", str(self.config.ffmpeg_threads)])
+
         ffmpeg_args.extend(["-y", str(out_path)])
         return ffmpeg_args
 

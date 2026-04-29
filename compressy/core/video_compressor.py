@@ -91,6 +91,9 @@ class VideoCompressor:
             ]
         )
 
+        if self.config.ffmpeg_threads is not None:
+            args.extend(["-threads", str(self.config.ffmpeg_threads)])
+
         # Add audio codec settings
         args.extend(
             [

@@ -5,6 +5,7 @@ import time
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
+from compressy.core.resource_limiter import apply_io_priority, build_popen_kwargs
 from compressy.utils.logger import get_logger
 
 
@@ -16,22 +17,37 @@ from compressy.utils.logger import get_logger
 class FFmpegExecutor:
     """Handles FFmpeg execution and progress tracking."""
 
-    def __init__(self, ffmpeg_path: Optional[str] = None):
+    def __init__(
+        self,
+        ffmpeg_path: Optional[str] = None,
+        process_priority: Optional[str] = None,
+        io_priority: Optional[str] = None,
+    ):
         """
         Initialize FFmpeg executor.
 
         Args:
             ffmpeg_path: Path to FFmpeg executable. If None, will attempt to find it.
+            process_priority: Optional CPU priority hint applied to each FFmpeg
+                child process at launch (e.g. ``"low"``). When ``None`` the
+                default OS scheduling behavior is used.
+            io_priority: Optional I/O priority hint applied post-launch to each
+                FFmpeg child process. When ``None`` the OS default is used.
         """
         self.logger = get_logger()
         self.ffmpeg_path = ffmpeg_path or self.find_ffmpeg()
+        self.process_priority = process_priority
+        self.io_priority = io_priority
         if self.ffmpeg_path is None:
             self.logger.critical("FFmpeg not found in PATH or common locations")
             raise FileNotFoundError(
                 "FFmpeg not found. Please install FFmpeg and add it to PATH, "
                 "or specify the path using --ffmpeg-path option."
             )
-        self.logger.debug(f"FFmpeg executor initialized with path: {self.ffmpeg_path}")
+        self.logger.debug(
+            f"FFmpeg executor initialized with path: {self.ffmpeg_path}, "
+            f"process_priority={self.process_priority}, io_priority={self.io_priority}"
+        )
 
     @staticmethod
     def find_ffmpeg() -> Optional[str]:
@@ -111,6 +127,9 @@ class FFmpegExecutor:
         # Start FFmpeg process with unbuffered stderr
         process = self._launch_process(cmd)
 
+        # Apply post-launch resource hints (best effort)
+        apply_io_priority(process, self.io_priority, logger=self.logger)
+
         stderr_lines = self._collect_progress(process, progress_interval)
         stdout, stderr_lines = self._finalize_process(process, stderr_lines)
         result = subprocess.CompletedProcess(cmd, process.returncode, stdout, "\n".join(stderr_lines))
@@ -119,6 +138,7 @@ class FFmpegExecutor:
         return result
 
     def _launch_process(self, cmd: List[str]) -> subprocess.Popen:
+        popen_kwargs = build_popen_kwargs(self.process_priority, logger=self.logger)
         return subprocess.Popen(  # nosec B603
             cmd,
             stdout=subprocess.PIPE,
@@ -127,6 +147,7 @@ class FFmpegExecutor:
             encoding="utf-8",
             errors="replace",
             bufsize=0,
+            **popen_kwargs,
         )
 
     def _collect_progress(self, process: subprocess.Popen, progress_interval: float) -> List[str]:
