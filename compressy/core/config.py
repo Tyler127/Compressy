@@ -2,10 +2,8 @@ import json
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, Optional
-from compressy.core.resource_limiter import (
-    VALID_IO_PRIORITIES,
-    VALID_PROCESS_PRIORITIES,
-)
+
+from compressy.core.resource_limiter import VALID_IO_PRIORITIES, VALID_PROCESS_PRIORITIES
 
 
 # ============================================================================
@@ -266,9 +264,7 @@ class ParameterValidator:
         if io_priority is None:
             return
         if io_priority not in VALID_IO_PRIORITIES:
-            raise ValueError(
-                f"ffmpeg_io_priority must be one of {list(VALID_IO_PRIORITIES)}, got {io_priority}"
-            )
+            raise ValueError(f"ffmpeg_io_priority must be one of {list(VALID_IO_PRIORITIES)}, got {io_priority}")
 
     @staticmethod
     def validate_cooldown_seconds(cooldown_seconds: float) -> None:

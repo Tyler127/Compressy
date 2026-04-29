@@ -12,7 +12,7 @@ import os
 import shutil
 import subprocess  # nosec B404
 import sys
-from typing import Any, Callable, Dict, Optional
+from typing import Any, Callable, Dict, Optional, cast
 
 
 # ============================================================================
@@ -118,9 +118,7 @@ def build_popen_kwargs(
 
     if process_priority not in VALID_PROCESS_PRIORITIES:
         if logger:
-            logger.warning(
-                f"Unknown process priority '{process_priority}', skipping"
-            )
+            logger.warning(f"Unknown process priority '{process_priority}', skipping")
         return {}
 
     if is_windows():
@@ -141,7 +139,8 @@ def _make_nice_preexec(nice_value: int) -> Callable[[], None]:
 
     def _apply_nice() -> None:
         try:
-            os.nice(nice_value)
+            nice_fn = cast(Callable[[int], int], getattr(os, "nice"))
+            nice_fn(nice_value)
         except (OSError, AttributeError, PermissionError):
             # nice() is unavailable on Windows, and negative increments require
             # CAP_SYS_NICE on POSIX. Fall back silently rather than fail the
@@ -188,9 +187,7 @@ def apply_io_priority(
         return _apply_linux_io_priority(process, io_priority, logger)
 
     if logger:
-        logger.warning(
-            f"I/O priority not supported on platform '{sys.platform}'"
-        )
+        logger.warning(f"I/O priority not supported on platform '{sys.platform}'")
     return False
 
 
@@ -208,10 +205,7 @@ def _apply_windows_io_priority(
     """
     if io_priority not in ("idle", "low"):
         if logger:
-            logger.debug(
-                f"Skipping Windows I/O priority for '{io_priority}' "
-                "(only idle/low are supported)"
-            )
+            logger.debug(f"Skipping Windows I/O priority for '{io_priority}' " "(only idle/low are supported)")
         return False
 
     try:
@@ -222,17 +216,12 @@ def _apply_windows_io_priority(
         handle = kernel32.OpenProcess(PROCESS_SET_INFORMATION, False, process.pid)
         if not handle:
             if logger:
-                logger.warning(
-                    f"Could not open FFmpeg process for I/O priority change "
-                    f"(pid={process.pid})"
-                )
+                logger.warning(f"Could not open FFmpeg process for I/O priority change " f"(pid={process.pid})")
             return False
         try:
             ok = kernel32.SetPriorityClass(handle, _WINDOWS_BACKGROUND_BEGIN)
             if not ok and logger:
-                logger.warning(
-                    f"SetPriorityClass background-begin failed for pid={process.pid}"
-                )
+                logger.warning(f"SetPriorityClass background-begin failed for pid={process.pid}")
             return bool(ok)
         finally:
             kernel32.CloseHandle(handle)
@@ -251,9 +240,7 @@ def _apply_linux_io_priority(
     ionice_path = shutil.which("ionice")
     if not ionice_path:
         if logger:
-            logger.warning(
-                "I/O priority requested but 'ionice' is not available in PATH"
-            )
+            logger.warning("I/O priority requested but 'ionice' is not available in PATH")
         return False
 
     io_class = _LINUX_IO_CLASSES.get(io_priority)
@@ -269,10 +256,7 @@ def _apply_linux_io_priority(
         )
         if result.returncode != 0:
             if logger:
-                logger.warning(
-                    f"ionice exited {result.returncode} for pid={process.pid}: "
-                    f"{result.stderr.strip()}"
-                )
+                logger.warning(f"ionice exited {result.returncode} for pid={process.pid}: " f"{result.stderr.strip()}")
             return False
         return True
     except (OSError, subprocess.SubprocessError) as exc:

@@ -415,9 +415,7 @@ class TestFFmpegExecutor:
     @patch("compressy.core.ffmpeg_executor.subprocess.Popen")
     @patch("compressy.core.ffmpeg_executor.time.time")
     @patch("compressy.core.ffmpeg_executor.time.sleep")
-    def test_run_with_progress_io_priority_unset_still_called_with_none(
-        self, mock_sleep, mock_time, mock_popen
-    ):
+    def test_run_with_progress_io_priority_unset_still_called_with_none(self, mock_sleep, mock_time, mock_popen):
         """apply_io_priority is invoked even with None so it can short-circuit."""
         executor = FFmpegExecutor(ffmpeg_path="/fake/ffmpeg")
 

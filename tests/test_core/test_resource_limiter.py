@@ -137,10 +137,13 @@ class TestBuildPopenKwargs:
 
     def test_windows_priority_dict_missing_falls_back(self):
         """If the Windows priority table is missing the key the helper returns {}."""
-        with patch(
-            "compressy.core.resource_limiter._WINDOWS_PRIORITY_CLASSES",
-            {},  # empty mapping forces flag=None branch
-        ), patch("compressy.core.resource_limiter.is_windows", return_value=True):
+        with (
+            patch(
+                "compressy.core.resource_limiter._WINDOWS_PRIORITY_CLASSES",
+                {},  # empty mapping forces flag=None branch
+            ),
+            patch("compressy.core.resource_limiter.is_windows", return_value=True),
+        ):
             assert build_popen_kwargs("low") == {}
 
 
@@ -169,18 +172,22 @@ class TestApplyIOPriority:
     def test_unsupported_platform_warns(self):
         process = MagicMock()
         logger = MagicMock()
-        with patch("compressy.core.resource_limiter.is_windows", return_value=False), patch(
-            "compressy.core.resource_limiter.is_linux", return_value=False
-        ), patch("compressy.core.resource_limiter.sys") as mock_sys:
+        with (
+            patch("compressy.core.resource_limiter.is_windows", return_value=False),
+            patch("compressy.core.resource_limiter.is_linux", return_value=False),
+            patch("compressy.core.resource_limiter.sys") as mock_sys,
+        ):
             mock_sys.platform = "darwin"
             assert apply_io_priority(process, "low", logger=logger) is False
         logger.warning.assert_called()
 
     def test_unsupported_platform_no_logger(self):
         process = MagicMock()
-        with patch("compressy.core.resource_limiter.is_windows", return_value=False), patch(
-            "compressy.core.resource_limiter.is_linux", return_value=False
-        ), patch("compressy.core.resource_limiter.sys") as mock_sys:
+        with (
+            patch("compressy.core.resource_limiter.is_windows", return_value=False),
+            patch("compressy.core.resource_limiter.is_linux", return_value=False),
+            patch("compressy.core.resource_limiter.sys") as mock_sys,
+        ):
             mock_sys.platform = "darwin"
             assert apply_io_priority(process, "low") is False
 
@@ -198,28 +205,33 @@ class TestApplyIOPriorityLinux:
     def test_linux_ionice_missing(self):
         process = MagicMock()
         logger = MagicMock()
-        with patch("compressy.core.resource_limiter.is_windows", return_value=False), patch(
-            "compressy.core.resource_limiter.is_linux", return_value=True
-        ), patch("compressy.core.resource_limiter.shutil.which", return_value=None):
+        with (
+            patch("compressy.core.resource_limiter.is_windows", return_value=False),
+            patch("compressy.core.resource_limiter.is_linux", return_value=True),
+            patch("compressy.core.resource_limiter.shutil.which", return_value=None),
+        ):
             assert apply_io_priority(process, "idle", logger=logger) is False
         logger.warning.assert_called_once()
 
     def test_linux_ionice_missing_no_logger(self):
         process = MagicMock()
-        with patch("compressy.core.resource_limiter.is_windows", return_value=False), patch(
-            "compressy.core.resource_limiter.is_linux", return_value=True
-        ), patch("compressy.core.resource_limiter.shutil.which", return_value=None):
+        with (
+            patch("compressy.core.resource_limiter.is_windows", return_value=False),
+            patch("compressy.core.resource_limiter.is_linux", return_value=True),
+            patch("compressy.core.resource_limiter.shutil.which", return_value=None),
+        ):
             assert apply_io_priority(process, "idle") is False
 
     def test_linux_ionice_success(self):
         process = MagicMock()
         process.pid = 1234
         completed = MagicMock(returncode=0, stderr="")
-        with patch("compressy.core.resource_limiter.is_windows", return_value=False), patch(
-            "compressy.core.resource_limiter.is_linux", return_value=True
-        ), patch("compressy.core.resource_limiter.shutil.which", return_value="/usr/bin/ionice"), patch(
-            "compressy.core.resource_limiter.subprocess.run", return_value=completed
-        ) as mock_run:
+        with (
+            patch("compressy.core.resource_limiter.is_windows", return_value=False),
+            patch("compressy.core.resource_limiter.is_linux", return_value=True),
+            patch("compressy.core.resource_limiter.shutil.which", return_value="/usr/bin/ionice"),
+            patch("compressy.core.resource_limiter.subprocess.run", return_value=completed) as mock_run,
+        ):
             assert apply_io_priority(process, "idle") is True
         mock_run.assert_called_once()
         call_args = mock_run.call_args[0][0]
@@ -233,11 +245,12 @@ class TestApplyIOPriorityLinux:
         process = MagicMock()
         process.pid = 99
         completed = MagicMock(returncode=0, stderr="")
-        with patch("compressy.core.resource_limiter.is_windows", return_value=False), patch(
-            "compressy.core.resource_limiter.is_linux", return_value=True
-        ), patch("compressy.core.resource_limiter.shutil.which", return_value="/usr/bin/ionice"), patch(
-            "compressy.core.resource_limiter.subprocess.run", return_value=completed
-        ) as mock_run:
+        with (
+            patch("compressy.core.resource_limiter.is_windows", return_value=False),
+            patch("compressy.core.resource_limiter.is_linux", return_value=True),
+            patch("compressy.core.resource_limiter.shutil.which", return_value="/usr/bin/ionice"),
+            patch("compressy.core.resource_limiter.subprocess.run", return_value=completed) as mock_run,
+        ):
             assert apply_io_priority(process, "low") is True
         call_args = mock_run.call_args[0][0]
         # low/normal -> best-effort class 2
@@ -247,11 +260,12 @@ class TestApplyIOPriorityLinux:
         process = MagicMock()
         process.pid = 99
         completed = MagicMock(returncode=0, stderr="")
-        with patch("compressy.core.resource_limiter.is_windows", return_value=False), patch(
-            "compressy.core.resource_limiter.is_linux", return_value=True
-        ), patch("compressy.core.resource_limiter.shutil.which", return_value="/usr/bin/ionice"), patch(
-            "compressy.core.resource_limiter.subprocess.run", return_value=completed
-        ) as mock_run:
+        with (
+            patch("compressy.core.resource_limiter.is_windows", return_value=False),
+            patch("compressy.core.resource_limiter.is_linux", return_value=True),
+            patch("compressy.core.resource_limiter.shutil.which", return_value="/usr/bin/ionice"),
+            patch("compressy.core.resource_limiter.subprocess.run", return_value=completed) as mock_run,
+        ):
             assert apply_io_priority(process, "high") is True
         call_args = mock_run.call_args[0][0]
         # realtime class 1
@@ -262,10 +276,11 @@ class TestApplyIOPriorityLinux:
         process.pid = 99
         completed = MagicMock(returncode=1, stderr="boom")
         logger = MagicMock()
-        with patch("compressy.core.resource_limiter.is_windows", return_value=False), patch(
-            "compressy.core.resource_limiter.is_linux", return_value=True
-        ), patch("compressy.core.resource_limiter.shutil.which", return_value="/usr/bin/ionice"), patch(
-            "compressy.core.resource_limiter.subprocess.run", return_value=completed
+        with (
+            patch("compressy.core.resource_limiter.is_windows", return_value=False),
+            patch("compressy.core.resource_limiter.is_linux", return_value=True),
+            patch("compressy.core.resource_limiter.shutil.which", return_value="/usr/bin/ionice"),
+            patch("compressy.core.resource_limiter.subprocess.run", return_value=completed),
         ):
             assert apply_io_priority(process, "idle", logger=logger) is False
         logger.warning.assert_called_once()
@@ -274,10 +289,11 @@ class TestApplyIOPriorityLinux:
         process = MagicMock()
         process.pid = 99
         completed = MagicMock(returncode=1, stderr="boom")
-        with patch("compressy.core.resource_limiter.is_windows", return_value=False), patch(
-            "compressy.core.resource_limiter.is_linux", return_value=True
-        ), patch("compressy.core.resource_limiter.shutil.which", return_value="/usr/bin/ionice"), patch(
-            "compressy.core.resource_limiter.subprocess.run", return_value=completed
+        with (
+            patch("compressy.core.resource_limiter.is_windows", return_value=False),
+            patch("compressy.core.resource_limiter.is_linux", return_value=True),
+            patch("compressy.core.resource_limiter.shutil.which", return_value="/usr/bin/ionice"),
+            patch("compressy.core.resource_limiter.subprocess.run", return_value=completed),
         ):
             assert apply_io_priority(process, "idle") is False
 
@@ -285,11 +301,14 @@ class TestApplyIOPriorityLinux:
         process = MagicMock()
         process.pid = 99
         logger = MagicMock()
-        with patch("compressy.core.resource_limiter.is_windows", return_value=False), patch(
-            "compressy.core.resource_limiter.is_linux", return_value=True
-        ), patch("compressy.core.resource_limiter.shutil.which", return_value="/usr/bin/ionice"), patch(
-            "compressy.core.resource_limiter.subprocess.run",
-            side_effect=OSError("blocked"),
+        with (
+            patch("compressy.core.resource_limiter.is_windows", return_value=False),
+            patch("compressy.core.resource_limiter.is_linux", return_value=True),
+            patch("compressy.core.resource_limiter.shutil.which", return_value="/usr/bin/ionice"),
+            patch(
+                "compressy.core.resource_limiter.subprocess.run",
+                side_effect=OSError("blocked"),
+            ),
         ):
             assert apply_io_priority(process, "idle", logger=logger) is False
         logger.warning.assert_called_once()
@@ -297,11 +316,14 @@ class TestApplyIOPriorityLinux:
     def test_linux_ionice_subprocess_error(self):
         process = MagicMock()
         process.pid = 99
-        with patch("compressy.core.resource_limiter.is_windows", return_value=False), patch(
-            "compressy.core.resource_limiter.is_linux", return_value=True
-        ), patch("compressy.core.resource_limiter.shutil.which", return_value="/usr/bin/ionice"), patch(
-            "compressy.core.resource_limiter.subprocess.run",
-            side_effect=subprocess.SubprocessError("oops"),
+        with (
+            patch("compressy.core.resource_limiter.is_windows", return_value=False),
+            patch("compressy.core.resource_limiter.is_linux", return_value=True),
+            patch("compressy.core.resource_limiter.shutil.which", return_value="/usr/bin/ionice"),
+            patch(
+                "compressy.core.resource_limiter.subprocess.run",
+                side_effect=subprocess.SubprocessError("oops"),
+            ),
         ):
             assert apply_io_priority(process, "idle") is False
 
@@ -309,16 +331,16 @@ class TestApplyIOPriorityLinux:
         """If the ionice class table is empty the helper returns False without invoking subprocess."""
         process = MagicMock()
         process.pid = 99
-        with patch(
-            "compressy.core.resource_limiter._LINUX_IO_CLASSES",
-            {},  # empty mapping forces io_class=None branch
-        ), patch("compressy.core.resource_limiter.is_windows", return_value=False), patch(
-            "compressy.core.resource_limiter.is_linux", return_value=True
-        ), patch(
-            "compressy.core.resource_limiter.shutil.which", return_value="/usr/bin/ionice"
-        ), patch(
-            "compressy.core.resource_limiter.subprocess.run"
-        ) as mock_run:
+        with (
+            patch(
+                "compressy.core.resource_limiter._LINUX_IO_CLASSES",
+                {},  # empty mapping forces io_class=None branch
+            ),
+            patch("compressy.core.resource_limiter.is_windows", return_value=False),
+            patch("compressy.core.resource_limiter.is_linux", return_value=True),
+            patch("compressy.core.resource_limiter.shutil.which", return_value="/usr/bin/ionice"),
+            patch("compressy.core.resource_limiter.subprocess.run") as mock_run,
+        ):
             assert apply_io_priority(process, "idle") is False
         mock_run.assert_not_called()
 
@@ -357,8 +379,9 @@ class TestApplyIOPriorityWindows:
         ctypes_mock = MagicMock()
         ctypes_mock.windll = windll_mock
 
-        with patch("compressy.core.resource_limiter.is_windows", return_value=True), patch.dict(
-            "sys.modules", {"ctypes": ctypes_mock}
+        with (
+            patch("compressy.core.resource_limiter.is_windows", return_value=True),
+            patch.dict("sys.modules", {"ctypes": ctypes_mock}),
         ):
             assert apply_io_priority(process, "idle") is True
         kernel32.OpenProcess.assert_called_once()
@@ -373,8 +396,9 @@ class TestApplyIOPriorityWindows:
         ctypes_mock = MagicMock()
         ctypes_mock.windll.kernel32 = kernel32
 
-        with patch("compressy.core.resource_limiter.is_windows", return_value=True), patch.dict(
-            "sys.modules", {"ctypes": ctypes_mock}
+        with (
+            patch("compressy.core.resource_limiter.is_windows", return_value=True),
+            patch.dict("sys.modules", {"ctypes": ctypes_mock}),
         ):
             assert apply_io_priority(process, "low") is True
         # Verify the second SetPriorityClass argument matches the documented constant
@@ -390,8 +414,9 @@ class TestApplyIOPriorityWindows:
         ctypes_mock = MagicMock()
         ctypes_mock.windll.kernel32 = kernel32
 
-        with patch("compressy.core.resource_limiter.is_windows", return_value=True), patch.dict(
-            "sys.modules", {"ctypes": ctypes_mock}
+        with (
+            patch("compressy.core.resource_limiter.is_windows", return_value=True),
+            patch.dict("sys.modules", {"ctypes": ctypes_mock}),
         ):
             assert apply_io_priority(process, "idle", logger=logger) is False
         kernel32.SetPriorityClass.assert_not_called()
@@ -405,8 +430,9 @@ class TestApplyIOPriorityWindows:
         ctypes_mock = MagicMock()
         ctypes_mock.windll.kernel32 = kernel32
 
-        with patch("compressy.core.resource_limiter.is_windows", return_value=True), patch.dict(
-            "sys.modules", {"ctypes": ctypes_mock}
+        with (
+            patch("compressy.core.resource_limiter.is_windows", return_value=True),
+            patch.dict("sys.modules", {"ctypes": ctypes_mock}),
         ):
             assert apply_io_priority(process, "idle") is False
 
@@ -419,8 +445,9 @@ class TestApplyIOPriorityWindows:
         ctypes_mock = MagicMock()
         ctypes_mock.windll.kernel32 = kernel32
 
-        with patch("compressy.core.resource_limiter.is_windows", return_value=True), patch.dict(
-            "sys.modules", {"ctypes": ctypes_mock}
+        with (
+            patch("compressy.core.resource_limiter.is_windows", return_value=True),
+            patch.dict("sys.modules", {"ctypes": ctypes_mock}),
         ):
             assert apply_io_priority(process, "idle", logger=logger) is False
         kernel32.CloseHandle.assert_called_once_with(42)
@@ -434,8 +461,9 @@ class TestApplyIOPriorityWindows:
         ctypes_mock = MagicMock()
         ctypes_mock.windll.kernel32.OpenProcess.side_effect = OSError("nope")
 
-        with patch("compressy.core.resource_limiter.is_windows", return_value=True), patch.dict(
-            "sys.modules", {"ctypes": ctypes_mock}
+        with (
+            patch("compressy.core.resource_limiter.is_windows", return_value=True),
+            patch.dict("sys.modules", {"ctypes": ctypes_mock}),
         ):
             assert apply_io_priority(process, "idle", logger=logger) is False
         logger.warning.assert_called_once()
@@ -449,8 +477,9 @@ class TestApplyIOPriorityWindows:
         ctypes_mock = MagicMock()
         ctypes_mock.windll.kernel32.OpenProcess.side_effect = AttributeError("no windll")
 
-        with patch("compressy.core.resource_limiter.is_windows", return_value=True), patch.dict(
-            "sys.modules", {"ctypes": ctypes_mock}
+        with (
+            patch("compressy.core.resource_limiter.is_windows", return_value=True),
+            patch.dict("sys.modules", {"ctypes": ctypes_mock}),
         ):
             assert apply_io_priority(process, "idle") is False
 

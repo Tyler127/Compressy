@@ -1236,9 +1236,11 @@ class TestMediaCompressor:
         for f in files:
             f.write_bytes(b"0" * 10)
 
-        with patch.object(compressor, "_collect_files", return_value=files), patch.object(
-            compressor, "_process_file"
-        ), patch.object(compressor, "_apply_cooldown") as mock_cooldown:
+        with (
+            patch.object(compressor, "_collect_files", return_value=files),
+            patch.object(compressor, "_process_file"),
+            patch.object(compressor, "_apply_cooldown") as mock_cooldown,
+        ):
             compressor.compress()
 
         # _apply_cooldown is called once per file (it short-circuits on the last one itself)
