@@ -19,6 +19,7 @@ A powerful Python command-line tool for compressing videos and images using FFmp
   - [Video Compression](#video-compression)
   - [Image Compression](#image-compression)
   - [Advanced Options](#advanced-options)
+  - [Resource Limits](#resource-limits)
   - [Viewing Statistics](#viewing-statistics)
 - [Command-Line Arguments](#-command-line-arguments)
 - [Output](#-output)
@@ -197,6 +198,50 @@ python compressy.py /path/to/media -m 10MB
 python compressy.py /path/to/media -M 50MB
 ```
 
+### Resource Limits
+
+Long compression runs can saturate CPU, disk, and memory which on some systems
+leads to thermal throttling, audio glitches, or even kernel-mode crashes
+(for example Windows `IRQL_NOT_LESS_OR_EQUAL`). The flags below let you cap
+FFmpeg's resource usage so the rest of the machine stays responsive. They are
+all optional - if you don't pass any, behavior is identical to previous
+releases.
+
+```bash
+# Keep FFmpeg from saturating all CPU cores (cap concurrent encode threads)
+python compressy.py /path/to/media --ffmpeg-threads 4
+
+# Let FFmpeg auto-pick threads but run it at low CPU priority so the OS prefers
+# foreground apps over the encoder
+python compressy.py /path/to/media --ffmpeg-process-priority below_normal
+
+# Reduce disk pressure during recursive runs over big libraries
+python compressy.py /path/to/media -r --ffmpeg-io-priority idle
+
+# Add a 2-second pause between files so the system can recover between encodes
+python compressy.py /path/to/media -r --cooldown-seconds 2
+
+# Combined "safe on a busy machine" profile
+python compressy.py /path/to/media -r \
+    --ffmpeg-threads 4 \
+    --ffmpeg-process-priority low \
+    --ffmpeg-io-priority idle \
+    --cooldown-seconds 1.5
+```
+
+**Platform notes:**
+- `--ffmpeg-threads` is passed straight through to FFmpeg's `-threads` flag and
+  works on every platform. `0` is FFmpeg's "auto" sentinel, `1-64` caps threads.
+- `--ffmpeg-process-priority` uses `creationflags` on Windows and `os.nice()` on
+  POSIX. Lowering priority always works; raising it (`above_normal`/`high`) may
+  silently fall back if the OS denies the change.
+- `--ffmpeg-io-priority` uses `PROCESS_MODE_BACKGROUND_BEGIN` on Windows
+  (only `idle`/`low` produce a real change there) and `ionice` on Linux. On
+  macOS or platforms without these tools the request is ignored with a
+  warning in the log.
+- `--cooldown-seconds` is enforced inside Compressy (not FFmpeg) and applies
+  between files only - the final file is never followed by a sleep.
+
 ### Viewing Statistics
 
 ```bash
@@ -238,6 +283,10 @@ python compressy.py --help
 | `--backup-dir` | Directory for backups before compression | None |
 | `-s, --view-stats` | View cumulative statistics and exit | False |
 | `-h, --view-history` | View run history and exit (optionally limit to N runs) | None |
+| `--ffmpeg-threads` | Cap CPU threads FFmpeg uses per file (`0` = FFmpeg auto, `1-64` = hard cap) | None |
+| `--ffmpeg-process-priority` | OS scheduling priority for FFmpeg (`low`, `below_normal`, `normal`, `above_normal`, `high`) | None |
+| `--ffmpeg-io-priority` | I/O priority for FFmpeg (`idle`, `low`, `normal`, `high`) | None |
+| `--cooldown-seconds` | Seconds to sleep between files to reduce sustained system load | 0 |
 
 ## 📊 Output
 
@@ -406,6 +455,7 @@ Contributions are welcome! Please feel free to submit a Pull Request.
 - **Video resolution**: The `--video-resolution` option scales videos to the specified resolution. Use standard presets (720p, 1080p, 4k) or custom dimensions (WIDTHxHEIGHT)
 - **File size filtering**: `--min-size` and `--max-size` filter files before processing. Useful for targeting specific file size ranges
 - **Auto-renaming duplicates**: By default, Compressy renames source files that would generate colliding outputs (e.g., same basename across formats or formats that convert to `.jpg`) by adding ` (1)`, ` (2)`, etc. Use `--no-auto-rename` to keep originals, but collisions may cause skips/overwrites if outputs already exist
+- **Resource limits**: `--ffmpeg-threads`, `--ffmpeg-process-priority`, `--ffmpeg-io-priority`, and `--cooldown-seconds` are all best-effort throttles applied per-FFmpeg-process. They're useful when long compression runs saturate the system (thermal throttling, driver crashes such as Windows `IRQL_NOT_LESS_OR_EQUAL`, etc.). I/O priority and elevated priorities may be silently ignored on platforms or accounts that don't grant the change
 
 ## 🐛 Troubleshooting
 
