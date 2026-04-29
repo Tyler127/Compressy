@@ -181,3 +181,30 @@ class TestVideoCompressor:
         assert "-vf" in args
         vf_index = args.index("-vf")
         assert args[vf_index + 1] == "scale=1280:720"
+
+    def test_build_ffmpeg_args_omits_threads_by_default(self, mock_ffmpeg_executor, temp_dir):
+        """Default config should not append -threads (no behavior change)."""
+        config = CompressionConfig(source_folder=temp_dir)
+        compressor = VideoCompressor(mock_ffmpeg_executor, config)
+        args = compressor._build_ffmpeg_args(Path("in.mp4"), Path("out.mp4"))
+
+        assert "-threads" not in args
+
+    def test_build_ffmpeg_args_includes_threads_when_set(self, mock_ffmpeg_executor, temp_dir):
+        """Setting ffmpeg_threads should include -threads N."""
+        config = CompressionConfig(source_folder=temp_dir, ffmpeg_threads=2)
+        compressor = VideoCompressor(mock_ffmpeg_executor, config)
+        args = compressor._build_ffmpeg_args(Path("in.mp4"), Path("out.mp4"))
+
+        assert "-threads" in args
+        threads_index = args.index("-threads")
+        assert args[threads_index + 1] == "2"
+
+    def test_build_ffmpeg_args_threads_zero_auto(self, mock_ffmpeg_executor, temp_dir):
+        """ffmpeg_threads=0 still emits the flag (FFmpeg auto-detect)."""
+        config = CompressionConfig(source_folder=temp_dir, ffmpeg_threads=0)
+        compressor = VideoCompressor(mock_ffmpeg_executor, config)
+        args = compressor._build_ffmpeg_args(Path("in.mp4"), Path("out.mp4"))
+
+        assert "-threads" in args
+        assert args[args.index("-threads") + 1] == "0"

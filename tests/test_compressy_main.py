@@ -827,6 +827,163 @@ class TestCompressyMain:
 
     @patch("compressy.py.MediaCompressor")
     @patch("compressy.py.CompressionConfig")
+    @patch("sys.argv")
+    def test_main_with_resource_limit_flags(self, mock_argv, mock_config_class, mock_compressor_class, temp_dir):
+        """Resource limiting flags are forwarded to CompressionConfig and cmd_args."""
+        mock_argv.__getitem__.side_effect = lambda i: [
+            "compressy.py",
+            str(temp_dir),
+            "--ffmpeg-threads",
+            "4",
+            "--ffmpeg-process-priority",
+            "below_normal",
+            "--ffmpeg-io-priority",
+            "idle",
+            "--cooldown-seconds",
+            "1.5",
+        ][i]
+
+        mock_config = MagicMock()
+        mock_config_class.return_value = mock_config
+
+        mock_compressor = MagicMock()
+        mock_compressor.compress.return_value = {
+            "processed": 1,
+            "skipped": 0,
+            "errors": 0,
+            "total_original_size": 1000,
+            "total_compressed_size": 500,
+            "space_saved": 500,
+        }
+        mock_compressor_class.return_value = mock_compressor
+
+        with patch("compressy.py.ReportGenerator") as mock_report_gen_class:
+            mock_report_gen = MagicMock()
+            mock_report_gen.generate.return_value = [temp_dir / "reports" / "test_report.json"]
+            mock_report_gen_class.return_value = mock_report_gen
+
+            with patch("compressy.py.StatisticsManager"):
+                result = compressy_main.main()
+
+        assert result == 0
+
+        call_kwargs = mock_config_class.call_args[1]
+        assert call_kwargs["ffmpeg_threads"] == 4
+        assert call_kwargs["ffmpeg_process_priority"] == "below_normal"
+        assert call_kwargs["ffmpeg_io_priority"] == "idle"
+        assert call_kwargs["cooldown_seconds"] == 1.5
+
+        cmd_args = mock_report_gen.generate.call_args.kwargs["cmd_args"]
+        assert cmd_args["ffmpeg_threads"] == 4
+        assert cmd_args["ffmpeg_process_priority"] == "below_normal"
+        assert cmd_args["ffmpeg_io_priority"] == "idle"
+        assert cmd_args["cooldown_seconds"] == 1.5
+
+    @patch("compressy.py.MediaCompressor")
+    @patch("compressy.py.CompressionConfig")
+    @patch("sys.argv")
+    def test_main_resource_limit_defaults_omit_optional_cmd_args(
+        self, mock_argv, mock_config_class, mock_compressor_class, temp_dir
+    ):
+        """Without resource flags the cmd_args should not include those keys."""
+        mock_argv.__getitem__.side_effect = lambda i: ["compressy.py", str(temp_dir)][i]
+
+        mock_config = MagicMock()
+        mock_config_class.return_value = mock_config
+
+        mock_compressor = MagicMock()
+        mock_compressor.compress.return_value = {
+            "processed": 1,
+            "skipped": 0,
+            "errors": 0,
+            "total_original_size": 1000,
+            "total_compressed_size": 500,
+            "space_saved": 500,
+        }
+        mock_compressor_class.return_value = mock_compressor
+
+        with patch("compressy.py.ReportGenerator") as mock_report_gen_class:
+            mock_report_gen = MagicMock()
+            mock_report_gen.generate.return_value = [temp_dir / "reports" / "test_report.json"]
+            mock_report_gen_class.return_value = mock_report_gen
+
+            with patch("compressy.py.StatisticsManager"):
+                compressy_main.main()
+
+        call_kwargs = mock_config_class.call_args[1]
+        assert call_kwargs["ffmpeg_threads"] is None
+        assert call_kwargs["ffmpeg_process_priority"] is None
+        assert call_kwargs["ffmpeg_io_priority"] is None
+        assert call_kwargs["cooldown_seconds"] == 0.0
+
+        cmd_args = mock_report_gen.generate.call_args.kwargs["cmd_args"]
+        assert "ffmpeg_threads" not in cmd_args
+        assert "ffmpeg_process_priority" not in cmd_args
+        assert "ffmpeg_io_priority" not in cmd_args
+        assert "cooldown_seconds" not in cmd_args
+
+    @patch("compressy.py.MediaCompressor")
+    @patch("compressy.py.CompressionConfig")
+    @patch("sys.argv")
+    def test_main_resource_limit_threads_zero_included(
+        self, mock_argv, mock_config_class, mock_compressor_class, temp_dir
+    ):
+        """ffmpeg_threads=0 (FFmpeg auto) is still forwarded and reported."""
+        mock_argv.__getitem__.side_effect = lambda i: [
+            "compressy.py",
+            str(temp_dir),
+            "--ffmpeg-threads",
+            "0",
+        ][i]
+
+        mock_config = MagicMock()
+        mock_config_class.return_value = mock_config
+
+        mock_compressor = MagicMock()
+        mock_compressor.compress.return_value = {
+            "processed": 0,
+            "skipped": 0,
+            "errors": 0,
+            "total_original_size": 0,
+            "total_compressed_size": 0,
+            "space_saved": 0,
+        }
+        mock_compressor_class.return_value = mock_compressor
+
+        with patch("compressy.py.ReportGenerator") as mock_report_gen_class:
+            mock_report_gen = MagicMock()
+            mock_report_gen.generate.return_value = [temp_dir / "reports" / "test_report.json"]
+            mock_report_gen_class.return_value = mock_report_gen
+
+            with patch("compressy.py.StatisticsManager"):
+                compressy_main.main()
+
+        call_kwargs = mock_config_class.call_args[1]
+        assert call_kwargs["ffmpeg_threads"] == 0
+
+        cmd_args = mock_report_gen.generate.call_args.kwargs["cmd_args"]
+        assert cmd_args["ffmpeg_threads"] == 0
+
+    def test_main_invalid_process_priority_choice(self, capsys):
+        """argparse rejects invalid --ffmpeg-process-priority values."""
+        with patch("sys.argv", ["compressy.py", "src", "--ffmpeg-process-priority", "ludicrous"]):
+            with pytest.raises(SystemExit):
+                compressy_main.main()
+
+        output = capsys.readouterr()
+        assert "ffmpeg-process-priority" in output.err.lower() or "invalid choice" in output.err.lower()
+
+    def test_main_invalid_io_priority_choice(self, capsys):
+        """argparse rejects invalid --ffmpeg-io-priority values."""
+        with patch("sys.argv", ["compressy.py", "src", "--ffmpeg-io-priority", "supersonic"]):
+            with pytest.raises(SystemExit):
+                compressy_main.main()
+
+        output = capsys.readouterr()
+        assert "ffmpeg-io-priority" in output.err.lower() or "invalid choice" in output.err.lower()
+
+    @patch("compressy.py.MediaCompressor")
+    @patch("compressy.py.CompressionConfig")
     @patch("compressy.py.LoggingConfig.load_from_file")
     @patch("compressy.py.get_logger")
     @patch("sys.argv")
