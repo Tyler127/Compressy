@@ -4,6 +4,7 @@ import subprocess  # nosec B404
 import time
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
+
 from compressy.core.resource_limiter import apply_io_priority, build_popen_kwargs
 from compressy.utils.logger import get_logger
 
