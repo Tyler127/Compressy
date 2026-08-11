@@ -8,7 +8,6 @@ from typing import Dict, List, Optional, Tuple
 from compressy.core.resource_limiter import apply_io_priority, build_popen_kwargs
 from compressy.utils.logger import get_logger
 
-
 # ============================================================================
 # FFmpeg Executor
 # ============================================================================

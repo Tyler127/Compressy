@@ -297,11 +297,10 @@ def main() -> int:
     # Track results
     results = {}
 
-    # Run all checks and fixes
-    results["Black formatting"] = format_with_black(check_only=args.check)
     results["isort import sorting"] = sort_imports_with_isort(
         check_only=args.check
     )
+    results["Black formatting"] = format_with_black(check_only=args.check)
     results["flake8 linting"] = lint_with_flake8()
     results["pylint linting"] = lint_with_pylint()
     results["mypy type checking"] = type_check_with_mypy()

@@ -6,7 +6,6 @@ from typing import Dict, List, Optional
 
 from compressy.utils.logger import get_logger
 
-
 # ============================================================================
 # Report Generator
 # ============================================================================

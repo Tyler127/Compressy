@@ -13,7 +13,6 @@ from logging.handlers import RotatingFileHandler, TimedRotatingFileHandler
 from pathlib import Path
 from typing import cast
 
-
 # ============================================================================
 # RFC 5424 Syslog Severity Levels
 # ============================================================================

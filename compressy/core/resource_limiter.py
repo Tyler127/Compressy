@@ -14,7 +14,6 @@ import subprocess  # nosec B404
 import sys
 from typing import Any, Callable, Dict, Optional, cast
 
-
 # ============================================================================
 # Constants
 # ============================================================================
@@ -141,7 +140,7 @@ def _make_nice_preexec(nice_value: int) -> Callable[[], None]:
         try:
             nice_fn = cast(Callable[[int], int], getattr(os, "nice"))
             nice_fn(nice_value)
-        except (OSError, AttributeError, PermissionError):
+        except OSError, AttributeError, PermissionError:
             # nice() is unavailable on Windows, and negative increments require
             # CAP_SYS_NICE on POSIX. Fall back silently rather than fail the
             # entire FFmpeg launch over a soft preference.

@@ -14,7 +14,6 @@ from compressy.utils.file_processor import FileProcessor
 from compressy.utils.format import format_size
 from compressy.utils.logger import get_logger
 
-
 # ============================================================================
 # Media Compressor
 # ============================================================================
@@ -176,7 +175,7 @@ class MediaCompressor:
             # Simply exclude files in compressed folder - don't track stats here
             # Source files will go through normal processing and be handled by _should_skip_existing
             return [f for f in files if not self._is_file_in_folder(f, compressed_folder_abs)]
-        except (OSError, ValueError):
+        except OSError, ValueError:
             # If compressed folder path resolution fails, continue without exclusion
             return files
 
@@ -205,7 +204,7 @@ class MediaCompressor:
                 return True
             except ValueError:
                 return False
-        except (ValueError, AttributeError, OSError):
+        except ValueError, AttributeError, OSError:
             # If comparison fails, assume file is not in folder to be safe
             return False
 
@@ -236,7 +235,7 @@ class MediaCompressor:
                     continue
 
                 filtered_files.append(f)
-            except (OSError, FileNotFoundError):
+            except OSError, FileNotFoundError:
                 # Skip files that can't be accessed
                 continue
 
@@ -296,7 +295,7 @@ class MediaCompressor:
             try:
                 compressed_folder_abs = compressed_folder.resolve()
                 files = [f for f in files if not self._is_file_in_folder(f, compressed_folder_abs)]
-            except (OSError, ValueError):
+            except OSError, ValueError:
                 pass
         return files
 

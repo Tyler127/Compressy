@@ -5,7 +5,6 @@ from compressy.core.config import CompressionConfig
 from compressy.core.ffmpeg_executor import FFmpegExecutor
 from compressy.utils.logger import get_logger
 
-
 # ============================================================================
 # Image Compressor
 # ============================================================================
