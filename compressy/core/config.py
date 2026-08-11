@@ -2,7 +2,6 @@ import json
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, Optional
-
 from compressy.core.resource_limiter import VALID_IO_PRIORITIES, VALID_PROCESS_PRIORITIES
 
 
