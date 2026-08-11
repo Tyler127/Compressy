@@ -5,7 +5,6 @@ from compressy.core.config import CompressionConfig
 from compressy.core.ffmpeg_executor import FFmpegExecutor
 from compressy.utils.logger import get_logger
 
-
 # ============================================================================
 # Video Compressor
 # ============================================================================
@@ -90,6 +89,9 @@ class VideoCompressor:
                 self.config.video_preset,
             ]
         )
+
+        if self.config.ffmpeg_threads is not None:
+            args.extend(["-threads", str(self.config.ffmpeg_threads)])
 
         # Add audio codec settings
         args.extend(

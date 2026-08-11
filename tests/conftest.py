@@ -12,7 +12,6 @@ import pytest
 from compressy.core.config import CompressionConfig
 from compressy.core.ffmpeg_executor import FFmpegExecutor
 
-
 # Suppress print statements during tests
 
 

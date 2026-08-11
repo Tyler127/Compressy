@@ -14,7 +14,6 @@ from compressy.utils.file_processor import FileProcessor
 from compressy.utils.format import format_size
 from compressy.utils.logger import get_logger
 
-
 # ============================================================================
 # Media Compressor
 # ============================================================================
@@ -31,7 +30,11 @@ class MediaCompressor:
             config: Compression configuration
         """
         self.config = config
-        self.ffmpeg = FFmpegExecutor(config.ffmpeg_path)
+        self.ffmpeg = FFmpegExecutor(
+            config.ffmpeg_path,
+            process_priority=config.ffmpeg_process_priority,
+            io_priority=config.ffmpeg_io_priority,
+        )
         self.video_compressor = VideoCompressor(self.ffmpeg, config)
         self.image_compressor = ImageCompressor(self.ffmpeg, config)
         self.file_processor = FileProcessor()
@@ -102,12 +105,26 @@ class MediaCompressor:
         # Process each file
         for idx, file_path in enumerate(all_files, 1):
             self._process_file(file_path, idx, total_files_count, compressed_folder)
+            self._apply_cooldown(idx, total_files_count)
 
         # Set total processing time
         total_processing_time = time.time() - start_time
         self.stats.set_total_processing_time(total_processing_time)
 
         return self.stats.get_stats()
+
+    def _apply_cooldown(self, idx: int, total_files: int) -> None:
+        """Sleep between files to give the system time to recover.
+
+        Skipped after the final file to avoid wasting time once the run is
+        finished, and skipped entirely when the cooldown is non-positive so
+        the default behavior remains unchanged.
+        """
+        cooldown = getattr(self.config, "cooldown_seconds", 0.0) or 0.0
+        if cooldown <= 0 or idx >= total_files:
+            return
+        self.logger.debug(f"Cooling down for {cooldown}s before next file")
+        time.sleep(cooldown)
 
     def _collect_files(self, compressed_folder: Optional[Path] = None) -> List[Path]:
         """

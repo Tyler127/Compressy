@@ -5,7 +5,6 @@ from compressy.core.config import CompressionConfig
 from compressy.core.ffmpeg_executor import FFmpegExecutor
 from compressy.utils.logger import get_logger
 
-
 # ============================================================================
 # Image Compressor
 # ============================================================================
@@ -66,6 +65,9 @@ class ImageCompressor:
             ffmpeg_args.extend(self._jpeg_conversion_args(input_ext))
         elif self.config.preserve_format:
             ffmpeg_args.extend(self._preserve_format_args(input_ext))
+
+        if self.config.ffmpeg_threads is not None:
+            ffmpeg_args.extend(["-threads", str(self.config.ffmpeg_threads)])
 
         ffmpeg_args.extend(["-y", str(out_path)])
         return ffmpeg_args

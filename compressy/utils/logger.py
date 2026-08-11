@@ -11,7 +11,7 @@ import threading
 from datetime import datetime
 from logging.handlers import RotatingFileHandler, TimedRotatingFileHandler
 from pathlib import Path
-
+from typing import cast
 
 # ============================================================================
 # RFC 5424 Syslog Severity Levels
@@ -195,7 +195,7 @@ class CompressyLogger:
 
     def get_logger(self) -> logging.Logger:
         """Get the underlying logger instance."""
-        return self._logger
+        return cast(logging.Logger, self._logger)
 
     def _cleanup_handlers(self) -> None:
         """Close and remove all handlers from the logger."""

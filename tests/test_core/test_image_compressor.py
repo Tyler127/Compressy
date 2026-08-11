@@ -263,3 +263,51 @@ class TestImageCompressor:
 
         # Quality 97 should map to 97 - 5 = 92
         assert webp_quality == 92
+
+    def test_build_ffmpeg_args_omits_threads_by_default(self, mock_ffmpeg_executor, temp_dir):
+        """Default config should not append -threads."""
+        config = CompressionConfig(source_folder=temp_dir, preserve_format=True)
+        compressor = ImageCompressor(mock_ffmpeg_executor, config)
+        args = compressor._build_ffmpeg_args(Path("in.jpg"), Path("out.jpg"))
+
+        assert "-threads" not in args
+
+    def test_build_ffmpeg_args_includes_threads_when_set(self, mock_ffmpeg_executor, temp_dir):
+        """Setting ffmpeg_threads should include -threads N for images too."""
+        config = CompressionConfig(
+            source_folder=temp_dir,
+            preserve_format=True,
+            ffmpeg_threads=1,
+        )
+        compressor = ImageCompressor(mock_ffmpeg_executor, config)
+        args = compressor._build_ffmpeg_args(Path("in.jpg"), Path("out.jpg"))
+
+        assert "-threads" in args
+        assert args[args.index("-threads") + 1] == "1"
+
+    def test_build_ffmpeg_args_threads_inserted_before_output(self, mock_ffmpeg_executor, temp_dir):
+        """The -threads flag must come before the output file argument."""
+        config = CompressionConfig(
+            source_folder=temp_dir,
+            preserve_format=True,
+            ffmpeg_threads=4,
+        )
+        compressor = ImageCompressor(mock_ffmpeg_executor, config)
+        out_path = Path("out.jpg")
+        args = compressor._build_ffmpeg_args(Path("in.jpg"), out_path)
+
+        threads_index = args.index("-threads")
+        out_index = args.index(str(out_path))
+        assert threads_index < out_index
+
+    def test_build_ffmpeg_args_threads_zero_auto(self, mock_ffmpeg_executor, temp_dir):
+        """ffmpeg_threads=0 emits -threads 0 (FFmpeg auto)."""
+        config = CompressionConfig(
+            source_folder=temp_dir,
+            preserve_format=True,
+            ffmpeg_threads=0,
+        )
+        compressor = ImageCompressor(mock_ffmpeg_executor, config)
+        args = compressor._build_ffmpeg_args(Path("in.jpg"), Path("out.jpg"))
+
+        assert args[args.index("-threads") + 1] == "0"

@@ -332,6 +332,126 @@ class TestParameterValidator:
         config3 = CompressionConfig(source_folder=temp_dir)
         ParameterValidator.validate(config3)
 
+    def test_validate_ffmpeg_threads_none(self):
+        """Validation passes when ffmpeg_threads is None (default)."""
+        ParameterValidator.validate_ffmpeg_threads(None)
+
+    def test_validate_ffmpeg_threads_zero(self):
+        """0 is FFmpeg's auto value and should be allowed."""
+        ParameterValidator.validate_ffmpeg_threads(0)
+
+    def test_validate_ffmpeg_threads_positive(self):
+        ParameterValidator.validate_ffmpeg_threads(4)
+        ParameterValidator.validate_ffmpeg_threads(64)
+
+    def test_validate_ffmpeg_threads_negative(self):
+        with pytest.raises(ValueError, match="ffmpeg_threads must be non-negative"):
+            ParameterValidator.validate_ffmpeg_threads(-1)
+
+    def test_validate_ffmpeg_threads_too_large(self):
+        with pytest.raises(ValueError, match="64 or fewer"):
+            ParameterValidator.validate_ffmpeg_threads(65)
+
+    def test_validate_ffmpeg_threads_wrong_type_string(self):
+        with pytest.raises(ValueError, match="must be an integer"):
+            ParameterValidator.validate_ffmpeg_threads("4")
+
+    def test_validate_ffmpeg_threads_wrong_type_bool(self):
+        with pytest.raises(ValueError, match="must be an integer"):
+            ParameterValidator.validate_ffmpeg_threads(True)
+
+    def test_validate_ffmpeg_process_priority_none(self):
+        ParameterValidator.validate_ffmpeg_process_priority(None)
+
+    def test_validate_ffmpeg_process_priority_valid(self):
+        for value in ("low", "below_normal", "normal", "above_normal", "high"):
+            ParameterValidator.validate_ffmpeg_process_priority(value)
+
+    def test_validate_ffmpeg_process_priority_invalid(self):
+        with pytest.raises(ValueError, match="ffmpeg_process_priority must be one of"):
+            ParameterValidator.validate_ffmpeg_process_priority("bogus")
+
+    def test_validate_ffmpeg_io_priority_none(self):
+        ParameterValidator.validate_ffmpeg_io_priority(None)
+
+    def test_validate_ffmpeg_io_priority_valid(self):
+        for value in ("idle", "low", "normal", "high"):
+            ParameterValidator.validate_ffmpeg_io_priority(value)
+
+    def test_validate_ffmpeg_io_priority_invalid(self):
+        with pytest.raises(ValueError, match="ffmpeg_io_priority must be one of"):
+            ParameterValidator.validate_ffmpeg_io_priority("bogus")
+
+    def test_validate_cooldown_seconds_zero(self):
+        ParameterValidator.validate_cooldown_seconds(0)
+        ParameterValidator.validate_cooldown_seconds(0.0)
+
+    def test_validate_cooldown_seconds_positive(self):
+        ParameterValidator.validate_cooldown_seconds(0.5)
+        ParameterValidator.validate_cooldown_seconds(10)
+
+    def test_validate_cooldown_seconds_negative(self):
+        with pytest.raises(ValueError, match="cooldown_seconds must be non-negative"):
+            ParameterValidator.validate_cooldown_seconds(-1.0)
+
+    def test_validate_cooldown_seconds_none(self):
+        with pytest.raises(ValueError, match="cooldown_seconds must be a number"):
+            ParameterValidator.validate_cooldown_seconds(None)
+
+    def test_validate_cooldown_seconds_string(self):
+        with pytest.raises(ValueError, match="cooldown_seconds must be a number"):
+            ParameterValidator.validate_cooldown_seconds("1.0")
+
+    def test_validate_cooldown_seconds_bool(self):
+        with pytest.raises(ValueError, match="cooldown_seconds must be a number"):
+            ParameterValidator.validate_cooldown_seconds(True)
+
+    def test_config_with_resource_limit_fields(self, temp_dir):
+        """CompressionConfig accepts the new resource limiting fields."""
+        config = CompressionConfig(
+            source_folder=temp_dir,
+            ffmpeg_threads=4,
+            ffmpeg_process_priority="low",
+            ffmpeg_io_priority="idle",
+            cooldown_seconds=1.5,
+        )
+
+        assert config.ffmpeg_threads == 4
+        assert config.ffmpeg_process_priority == "low"
+        assert config.ffmpeg_io_priority == "idle"
+        assert config.cooldown_seconds == 1.5
+
+        ParameterValidator.validate(config)
+
+    def test_config_default_resource_limit_fields(self, temp_dir):
+        """Defaults preserve previous behavior (no limits applied)."""
+        config = CompressionConfig(source_folder=temp_dir)
+
+        assert config.ffmpeg_threads is None
+        assert config.ffmpeg_process_priority is None
+        assert config.ffmpeg_io_priority is None
+        assert config.cooldown_seconds == 0.0
+
+    def test_validate_invalid_ffmpeg_threads_in_config(self, temp_dir):
+        config = CompressionConfig(source_folder=temp_dir, ffmpeg_threads=-2)
+        with pytest.raises(ValueError):
+            ParameterValidator.validate(config)
+
+    def test_validate_invalid_process_priority_in_config(self, temp_dir):
+        config = CompressionConfig(source_folder=temp_dir, ffmpeg_process_priority="ludicrous")
+        with pytest.raises(ValueError):
+            ParameterValidator.validate(config)
+
+    def test_validate_invalid_io_priority_in_config(self, temp_dir):
+        config = CompressionConfig(source_folder=temp_dir, ffmpeg_io_priority="ludicrous")
+        with pytest.raises(ValueError):
+            ParameterValidator.validate(config)
+
+    def test_validate_invalid_cooldown_in_config(self, temp_dir):
+        config = CompressionConfig(source_folder=temp_dir, cooldown_seconds=-1.0)
+        with pytest.raises(ValueError):
+            ParameterValidator.validate(config)
+
 
 @pytest.mark.unit
 class TestLoggingConfig:

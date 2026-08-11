@@ -16,7 +16,6 @@ from compressy.services.statistics import StatisticsManager, StatisticsTracker
 from compressy.utils.file_processor import FileProcessor
 from compressy.utils.format import format_size, parse_resolution, parse_size
 
-
 __all__ = [
     "CompressionConfig",
     "ParameterValidator",

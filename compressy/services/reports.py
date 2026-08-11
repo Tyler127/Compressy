@@ -6,7 +6,6 @@ from typing import Dict, List, Optional
 
 from compressy.utils.logger import get_logger
 
-
 # ============================================================================
 # Report Generator
 # ============================================================================
@@ -271,6 +270,10 @@ class ReportGenerator:
                 "progress_interval": cmd_args.get("progress_interval"),
                 "ffmpeg_path": cmd_args.get("ffmpeg_path"),
                 "backup_dir": cmd_args.get("backup_dir"),
+                "ffmpeg_threads": cmd_args.get("ffmpeg_threads"),
+                "ffmpeg_process_priority": cmd_args.get("ffmpeg_process_priority"),
+                "ffmpeg_io_priority": cmd_args.get("ffmpeg_io_priority"),
+                "cooldown_seconds": cmd_args.get("cooldown_seconds"),
             }
 
         # Build complete report structure

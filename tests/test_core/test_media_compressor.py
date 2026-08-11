@@ -1152,6 +1152,103 @@ class TestMediaCompressor:
         assert "within.mp4" in file_names
         assert "large.mp4" not in file_names
 
+    def test_initialization_passes_priority_to_executor(self, temp_dir):
+        """MediaCompressor forwards process/io priority to the FFmpegExecutor."""
+        config = CompressionConfig(
+            source_folder=temp_dir,
+            ffmpeg_process_priority="low",
+            ffmpeg_io_priority="idle",
+        )
+        with patch("compressy.core.media_compressor.FFmpegExecutor") as mock_ffmpeg_class:
+            MediaCompressor(config)
+
+        mock_ffmpeg_class.assert_called_once()
+        kwargs = mock_ffmpeg_class.call_args.kwargs
+        assert kwargs["process_priority"] == "low"
+        assert kwargs["io_priority"] == "idle"
+
+    def test_initialization_default_priority_passes_none(self, temp_dir):
+        config = CompressionConfig(source_folder=temp_dir)
+        with patch("compressy.core.media_compressor.FFmpegExecutor") as mock_ffmpeg_class:
+            MediaCompressor(config)
+
+        kwargs = mock_ffmpeg_class.call_args.kwargs
+        assert kwargs["process_priority"] is None
+        assert kwargs["io_priority"] is None
+
+    def test_apply_cooldown_no_op_when_zero(self, temp_dir):
+        """A zero cooldown should not call sleep at all."""
+        config = CompressionConfig(source_folder=temp_dir, cooldown_seconds=0.0)
+        with patch("compressy.core.media_compressor.FFmpegExecutor"):
+            compressor = MediaCompressor(config)
+
+        with patch("compressy.core.media_compressor.time.sleep") as mock_sleep:
+            compressor._apply_cooldown(idx=1, total_files=5)
+
+        mock_sleep.assert_not_called()
+
+    def test_apply_cooldown_negative_or_falsy(self, temp_dir):
+        """Negative/None cooldown is treated as no-op without sleeping."""
+        config = CompressionConfig(source_folder=temp_dir)
+        with patch("compressy.core.media_compressor.FFmpegExecutor"):
+            compressor = MediaCompressor(config)
+
+        # Bypass validator (this is a defensive runtime guard)
+        compressor.config.cooldown_seconds = -1.0
+        with patch("compressy.core.media_compressor.time.sleep") as mock_sleep:
+            compressor._apply_cooldown(idx=1, total_files=5)
+        mock_sleep.assert_not_called()
+
+        compressor.config.cooldown_seconds = None  # type: ignore[assignment]
+        with patch("compressy.core.media_compressor.time.sleep") as mock_sleep:
+            compressor._apply_cooldown(idx=1, total_files=5)
+        mock_sleep.assert_not_called()
+
+    def test_apply_cooldown_skipped_after_last_file(self, temp_dir):
+        """No cooldown after the final file in the run."""
+        config = CompressionConfig(source_folder=temp_dir, cooldown_seconds=2.0)
+        with patch("compressy.core.media_compressor.FFmpegExecutor"):
+            compressor = MediaCompressor(config)
+
+        with patch("compressy.core.media_compressor.time.sleep") as mock_sleep:
+            compressor._apply_cooldown(idx=5, total_files=5)
+
+        mock_sleep.assert_not_called()
+
+    def test_apply_cooldown_sleeps_between_files(self, temp_dir):
+        """Cooldown sleeps the configured duration between non-final files."""
+        config = CompressionConfig(source_folder=temp_dir, cooldown_seconds=1.5)
+        with patch("compressy.core.media_compressor.FFmpegExecutor"):
+            compressor = MediaCompressor(config)
+
+        with patch("compressy.core.media_compressor.time.sleep") as mock_sleep:
+            compressor._apply_cooldown(idx=2, total_files=5)
+
+        mock_sleep.assert_called_once_with(1.5)
+
+    def test_compress_invokes_cooldown_between_files(self, temp_dir):
+        """The orchestrator calls _apply_cooldown for every processed file."""
+        config = CompressionConfig(source_folder=temp_dir, cooldown_seconds=0.25)
+        with patch("compressy.core.media_compressor.FFmpegExecutor"):
+            compressor = MediaCompressor(config)
+
+        files = [temp_dir / f"f{i}.mp4" for i in range(3)]
+        for f in files:
+            f.write_bytes(b"0" * 10)
+
+        with (
+            patch.object(compressor, "_collect_files", return_value=files),
+            patch.object(compressor, "_process_file"),
+            patch.object(compressor, "_apply_cooldown") as mock_cooldown,
+        ):
+            compressor.compress()
+
+        # _apply_cooldown is called once per file (it short-circuits on the last one itself)
+        assert mock_cooldown.call_count == len(files)
+        # Last call should pass the final idx
+        last_call = mock_cooldown.call_args_list[-1]
+        assert last_call.args == (len(files), len(files))
+
     def test_apply_size_filters_stat_error(self, temp_dir):
         """Test _apply_size_filters handles stat errors gracefully."""
         config = CompressionConfig(source_folder=temp_dir, min_size=500)

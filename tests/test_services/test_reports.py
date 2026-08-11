@@ -509,3 +509,65 @@ class TestReportGenerator:
             report = json.load(f)
 
         assert report["arguments"]["backup_dir"] == "/backup/path"
+
+    def test_write_json_report_includes_resource_limits(self, temp_dir):
+        """Resource limit options are echoed into the JSON arguments section."""
+        generator = ReportGenerator(temp_dir)
+        report_path = temp_dir / "test_report.json"
+
+        stats = {
+            "total_files": 0,
+            "processed": 0,
+            "skipped": 0,
+            "errors": 0,
+            "total_original_size": 0,
+            "total_compressed_size": 0,
+            "space_saved": 0,
+            "files": [],
+        }
+
+        cmd_args = {
+            "source_folder": "/test/folder",
+            "ffmpeg_threads": 4,
+            "ffmpeg_process_priority": "low",
+            "ffmpeg_io_priority": "idle",
+            "cooldown_seconds": 2.5,
+        }
+
+        generator._write_json_report(report_path, stats, "Test Report", cmd_args=cmd_args)
+
+        with open(report_path, "r", encoding="utf-8") as f:
+            report = json.load(f)
+
+        assert report["arguments"]["ffmpeg_threads"] == 4
+        assert report["arguments"]["ffmpeg_process_priority"] == "low"
+        assert report["arguments"]["ffmpeg_io_priority"] == "idle"
+        assert report["arguments"]["cooldown_seconds"] == 2.5
+
+    def test_write_json_report_resource_limits_default_none(self, temp_dir):
+        """When no resource limits are passed the report records null for them."""
+        generator = ReportGenerator(temp_dir)
+        report_path = temp_dir / "test_report.json"
+
+        stats = {
+            "total_files": 0,
+            "processed": 0,
+            "skipped": 0,
+            "errors": 0,
+            "total_original_size": 0,
+            "total_compressed_size": 0,
+            "space_saved": 0,
+            "files": [],
+        }
+
+        cmd_args = {"source_folder": "/test/folder"}
+
+        generator._write_json_report(report_path, stats, "Test Report", cmd_args=cmd_args)
+
+        with open(report_path, "r", encoding="utf-8") as f:
+            report = json.load(f)
+
+        assert report["arguments"]["ffmpeg_threads"] is None
+        assert report["arguments"]["ffmpeg_process_priority"] is None
+        assert report["arguments"]["ffmpeg_io_priority"] is None
+        assert report["arguments"]["cooldown_seconds"] is None

@@ -6,7 +6,6 @@ from typing import Any, Dict, List, Optional, cast
 from compressy.utils.format import format_size
 from compressy.utils.logger import get_logger
 
-
 # ============================================================================
 # Statistics Tracker
 # ============================================================================

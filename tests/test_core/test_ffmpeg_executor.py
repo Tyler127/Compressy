@@ -339,3 +339,95 @@ class TestFFmpegExecutor:
         formatted = executor._format_progress({})
 
         assert formatted == "  [Progress]"
+
+    def test_init_stores_resource_limit_options(self):
+        """Resource limit options should be stored on the executor."""
+        executor = FFmpegExecutor(
+            ffmpeg_path="/fake/ffmpeg",
+            process_priority="low",
+            io_priority="idle",
+        )
+
+        assert executor.process_priority == "low"
+        assert executor.io_priority == "idle"
+
+    def test_init_default_resource_limits_none(self):
+        executor = FFmpegExecutor(ffmpeg_path="/fake/ffmpeg")
+        assert executor.process_priority is None
+        assert executor.io_priority is None
+
+    @patch("compressy.core.ffmpeg_executor.subprocess.Popen")
+    def test_launch_process_passes_priority_kwargs(self, mock_popen):
+        """When a process_priority is set, build_popen_kwargs is consulted."""
+        executor = FFmpegExecutor(
+            ffmpeg_path="/fake/ffmpeg",
+            process_priority="low",
+        )
+
+        with patch(
+            "compressy.core.ffmpeg_executor.build_popen_kwargs",
+            return_value={"creationflags": 0x40},
+        ) as mock_build:
+            executor._launch_process(["/fake/ffmpeg", "-version"])
+
+        mock_build.assert_called_once_with("low", logger=executor.logger)
+        kwargs = mock_popen.call_args.kwargs
+        assert kwargs["creationflags"] == 0x40
+
+    @patch("compressy.core.ffmpeg_executor.subprocess.Popen")
+    def test_launch_process_no_priority_kwargs_when_unset(self, mock_popen):
+        executor = FFmpegExecutor(ffmpeg_path="/fake/ffmpeg")
+
+        with patch(
+            "compressy.core.ffmpeg_executor.build_popen_kwargs",
+            return_value={},
+        ) as mock_build:
+            executor._launch_process(["/fake/ffmpeg", "-version"])
+
+        mock_build.assert_called_once_with(None, logger=executor.logger)
+        kwargs = mock_popen.call_args.kwargs
+        assert "creationflags" not in kwargs
+        assert "preexec_fn" not in kwargs
+
+    @patch("compressy.core.ffmpeg_executor.subprocess.Popen")
+    @patch("compressy.core.ffmpeg_executor.time.time")
+    @patch("compressy.core.ffmpeg_executor.time.sleep")
+    def test_run_with_progress_applies_io_priority(self, mock_sleep, mock_time, mock_popen):
+        """run_with_progress should call apply_io_priority post-launch."""
+        executor = FFmpegExecutor(
+            ffmpeg_path="/fake/ffmpeg",
+            io_priority="idle",
+        )
+
+        mock_process = MagicMock()
+        mock_process.poll.side_effect = [None, 0]
+        mock_process.stderr.readline.side_effect = ["", ""]
+        mock_process.communicate.return_value = ("", "")
+        mock_process.returncode = 0
+        mock_popen.return_value = mock_process
+        mock_time.return_value = 0.0
+
+        with patch("compressy.core.ffmpeg_executor.apply_io_priority") as mock_apply:
+            executor.run_with_progress(["-i", "in.mp4", "out.mp4"])
+
+        mock_apply.assert_called_once_with(mock_process, "idle", logger=executor.logger)
+
+    @patch("compressy.core.ffmpeg_executor.subprocess.Popen")
+    @patch("compressy.core.ffmpeg_executor.time.time")
+    @patch("compressy.core.ffmpeg_executor.time.sleep")
+    def test_run_with_progress_io_priority_unset_still_called_with_none(self, mock_sleep, mock_time, mock_popen):
+        """apply_io_priority is invoked even with None so it can short-circuit."""
+        executor = FFmpegExecutor(ffmpeg_path="/fake/ffmpeg")
+
+        mock_process = MagicMock()
+        mock_process.poll.side_effect = [None, 0]
+        mock_process.stderr.readline.side_effect = ["", ""]
+        mock_process.communicate.return_value = ("", "")
+        mock_process.returncode = 0
+        mock_popen.return_value = mock_process
+        mock_time.return_value = 0.0
+
+        with patch("compressy.core.ffmpeg_executor.apply_io_priority") as mock_apply:
+            executor.run_with_progress(["-i", "in.mp4", "out.mp4"])
+
+        mock_apply.assert_called_once_with(mock_process, None, logger=executor.logger)
