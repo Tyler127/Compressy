@@ -196,6 +196,9 @@ python compressy.py /path/to/media -m 10MB
 
 # Process only small files (under 50MB)
 python compressy.py /path/to/media -M 50MB
+
+# Copy size-filtered files into the output directory unchanged
+python compressy.py /path/to/media -m 10MB --copy-skipped-files
 ```
 
 ### Resource Limits
@@ -276,6 +279,7 @@ python compressy.py --help
 | `--no-auto-rename` | Disable auto-renaming duplicate basenames before compression | False (auto-rename on) |
 | `-m, --min-size` | Minimum file size to process (e.g., '1MB', '500KB', '1.5GB') | None |
 | `-M, --max-size` | Maximum file size to process (e.g., '100MB', '1GB', '2.5GB') | None |
+| `--copy-skipped-files` | Copy files excluded by `--min-size`/`--max-size` into the output directory unchanged | False |
 | `-d, --output-dir` | Custom output directory for compressed files (cannot be used with --overwrite) | None |
 | `--ffmpeg-path` | Custom path to FFmpeg executable | Auto-detect |
 | `-pi, --progress-interval` | Seconds between progress updates | 5.0 |
@@ -367,6 +371,9 @@ python compressy.py ~/Media --recursive --min-size 50MB
 
 # Compress files between 10MB and 500MB
 python compressy.py ~/Media --recursive --min-size 10MB --max-size 500MB
+
+# Compress only large files, but still copy smaller media into the output tree
+python compressy.py ~/Media --recursive --min-size 10MB --copy-skipped-files --output-dir ~/MediaOut
 ```
 
 ### Example 7: Custom output directory
@@ -453,7 +460,7 @@ Contributions are welcome! Please feel free to submit a Pull Request.
 - **FFmpeg required**: This tool requires FFmpeg to be installed and accessible
 - **Output directory**: When using `--output-dir`, compressed files are saved to the custom directory. Cannot be combined with `--overwrite`
 - **Video resolution**: The `--video-resolution` option scales videos to the specified resolution. Use standard presets (720p, 1080p, 4k) or custom dimensions (WIDTHxHEIGHT)
-- **File size filtering**: `--min-size` and `--max-size` filter files before processing. Useful for targeting specific file size ranges
+- **File size filtering**: `--min-size` and `--max-size` filter files before processing. Useful for targeting specific file size ranges. Size-filtered files are omitted from the output directory unless you pass `--copy-skipped-files`
 - **Auto-renaming duplicates**: By default, Compressy renames source files that would generate colliding outputs (e.g., same basename across formats or formats that convert to `.jpg`) by adding ` (1)`, ` (2)`, etc. Use `--no-auto-rename` to keep originals, but collisions may cause skips/overwrites if outputs already exist
 - **Resource limits**: `--ffmpeg-threads`, `--ffmpeg-process-priority`, `--ffmpeg-io-priority`, and `--cooldown-seconds` are all best-effort throttles applied per-FFmpeg-process. They're useful when long compression runs saturate the system (thermal throttling, driver crashes such as Windows `IRQL_NOT_LESS_OR_EQUAL`, etc.). I/O priority and elevated priorities may be silently ignored on platforms or accounts that don't grant the change
 

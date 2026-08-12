@@ -82,30 +82,43 @@ class MediaCompressor:
         start_time = time.time()
 
         # Collect files (exclude files in compressed folder)
-        all_files = self._collect_files(compressed_folder)
+        all_files, size_skipped_files = self._collect_files(compressed_folder)
+
+        should_copy_skipped = self.config.copy_skipped_files and not self.config.overwrite
+        if should_copy_skipped or all_files:
+            if not self.config.overwrite:
+                compressed_folder.mkdir(parents=True, exist_ok=True)
+                self.logger.debug(f"Created compressed folder: {compressed_folder}")
+
+        skipped_handled = 0
+        if should_copy_skipped and size_skipped_files:
+            skipped_handled = self._copy_skipped_files(size_skipped_files, compressed_folder)
 
         if not all_files:
-            self.logger.info("No media files found to compress")
-            print("No media files found to compress.")
+            if skipped_handled:
+                self.stats.stats["total_files"] = skipped_handled
+                self.logger.info(f"No media files to compress; copied {skipped_handled} size-filtered file(s)")
+                print(f"No media files to compress; copied {skipped_handled} size-filtered file(s).")
+            else:
+                self.logger.info("No media files found to compress")
+                print("No media files found to compress.")
+            total_processing_time = time.time() - start_time
+            self.stats.set_total_processing_time(total_processing_time)
             result = self.stats.get_stats()
             if not self.config.recursive:
                 result.pop("folder_stats", None)
             return result
 
-        if not self.config.overwrite:
-            compressed_folder.mkdir(parents=True, exist_ok=True)
-            self.logger.debug(f"Created compressed folder: {compressed_folder}")
-
-        total_files_count = len(all_files)
+        total_files_count = len(all_files) + skipped_handled
         # Set total_files once - this represents all files found upfront
         self.stats.stats["total_files"] = total_files_count
-        self.logger.info(f"Found {total_files_count} media file(s) to process")
-        print(f"Found {total_files_count} media file(s) to process...")
+        self.logger.info(f"Found {len(all_files)} media file(s) to process")
+        print(f"Found {len(all_files)} media file(s) to process...")
 
         # Process each file
         for idx, file_path in enumerate(all_files, 1):
-            self._process_file(file_path, idx, total_files_count, compressed_folder)
-            self._apply_cooldown(idx, total_files_count)
+            self._process_file(file_path, idx, len(all_files), compressed_folder)
+            self._apply_cooldown(idx, len(all_files))
 
         # Set total processing time
         total_processing_time = time.time() - start_time
@@ -126,7 +139,7 @@ class MediaCompressor:
         self.logger.debug(f"Cooling down for {cooldown}s before next file")
         time.sleep(cooldown)
 
-    def _collect_files(self, compressed_folder: Optional[Path] = None) -> List[Path]:
+    def _collect_files(self, compressed_folder: Optional[Path] = None) -> Tuple[List[Path], List[Path]]:
         """
         Collect files to process based on recursive setting and size filters.
 
@@ -135,12 +148,11 @@ class MediaCompressor:
                                If None or overwrite mode, no exclusion is performed.
 
         Returns:
-            List of file paths to process
+            Tuple of (files to process, files excluded by size filters)
         """
         files = self._gather_media_files()
         files = self._exclude_compressed_folder_files(files, compressed_folder)
-        files = self._apply_size_filters(files)
-        return files
+        return self._apply_size_filters(files)
 
     def _gather_media_files(self) -> List[Path]:
         """
@@ -208,7 +220,7 @@ class MediaCompressor:
             # If comparison fails, assume file is not in folder to be safe
             return False
 
-    def _apply_size_filters(self, files: List[Path]) -> List[Path]:
+    def _apply_size_filters(self, files: List[Path]) -> Tuple[List[Path], List[Path]]:
         """
         Apply min and max size filters to file list.
 
@@ -216,22 +228,25 @@ class MediaCompressor:
             files: List of file paths to filter
 
         Returns:
-            Filtered list of file paths
+            Tuple of (files within size range, files excluded by size filters)
         """
         if self.config.min_size is None and self.config.max_size is None:
-            return files
+            return files, []
 
-        filtered_files = []
+        filtered_files: List[Path] = []
+        size_skipped_files: List[Path] = []
         for f in files:
             try:
                 file_size = f.stat().st_size
 
                 # Check min_size
                 if self.config.min_size is not None and file_size < self.config.min_size:
+                    size_skipped_files.append(f)
                     continue
 
                 # Check max_size
                 if self.config.max_size is not None and file_size > self.config.max_size:
+                    size_skipped_files.append(f)
                     continue
 
                 filtered_files.append(f)
@@ -239,7 +254,79 @@ class MediaCompressor:
                 # Skip files that can't be accessed
                 continue
 
-        return filtered_files
+        return filtered_files, size_skipped_files
+
+    def _copy_skipped_files(self, skipped_files: List[Path], compressed_folder: Path) -> int:
+        """
+        Copy size-filtered files into the output directory unchanged.
+
+        Args:
+            skipped_files: Files excluded by min/max size filters
+            compressed_folder: Output directory root
+
+        Returns:
+            Number of size-filtered files handled (copied or already present)
+        """
+        handled = 0
+        for file_path in skipped_files:
+            try:
+                handled += self._copy_one_skipped_file(file_path, compressed_folder)
+            except Exception as error:
+                self.logger.error(
+                    f"Failed to copy size-filtered file: {file_path.name}",
+                    exc_info=True,
+                )
+                print(f"  ✗ Error copying size-filtered file {file_path.name}: {error}")
+                folder_key = self._get_folder_key(file_path)
+                file_type, file_extension = self._identify_file(file_path)
+                try:
+                    original_size = file_path.stat().st_size
+                except OSError:
+                    original_size = 0
+                self.stats.add_total_file_size(original_size, folder_key)
+                self.stats.update_stats(original_size, 0, 0, "error", folder_key, file_type, file_extension)
+                handled += 1
+        return handled
+
+    def _copy_one_skipped_file(self, file_path: Path, compressed_folder: Path) -> int:
+        """Copy a single size-filtered file to the output tree. Returns 1 if handled."""
+        out_path = self.file_processor.determine_output_path(
+            file_path,
+            self.config.source_folder,
+            compressed_folder,
+            overwrite=False,
+        )
+        folder_key = self._get_folder_key(file_path)
+        original_size = file_path.stat().st_size
+        self.stats.add_total_file_size(original_size, folder_key)
+        file_type, file_extension = self._identify_file(file_path)
+
+        if out_path.exists():
+            self.logger.info(f"Size-filtered output already exists, skipping copy: {file_path.name}")
+            print(f"  • Size-filtered (already in output): {file_path.name} ({format_size(original_size)})")
+        else:
+            if self.config.preserve_timestamps:
+                shutil.copy2(file_path, out_path)
+                self.file_processor.preserve_timestamps(file_path, out_path)
+            else:
+                shutil.copy(file_path, out_path)
+            self.logger.info(f"Copied size-filtered file: {file_path.name}")
+            print(f"  • Copied size-filtered: {file_path.name} ({format_size(original_size)})")
+
+        file_info = self._build_file_info(
+            file_path,
+            original_size,
+            original_size,
+            0,
+            0.0,
+            0.0,
+            "skipped (copied)",
+            file_type,
+            file_extension,
+        )
+        self.stats.add_file_info(file_info, folder_key)
+        self.stats.update_stats(original_size, original_size, 0, "skipped", folder_key, file_type, file_extension)
+        return 1
 
     def _get_folder_key(self, file_path: Path) -> str:
         """Get folder key for recursive mode statistics."""

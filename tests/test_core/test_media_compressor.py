@@ -44,7 +44,7 @@ class TestMediaCompressor:
             subdir.mkdir()
             (subdir / "nested.mp4").touch()  # Should be ignored in non-recursive
 
-            files = compressor._collect_files()
+            files, skipped = compressor._collect_files()
 
             # Should only find files in root, not subdir
             file_names = [f.name for f in files]
@@ -52,6 +52,7 @@ class TestMediaCompressor:
             assert "image.jpg" in file_names
             assert "text.txt" not in file_names
             assert "nested.mp4" not in file_names
+            assert skipped == []
 
     def test_collect_files_recursive(self, temp_dir):
         """Test collecting files in recursive mode."""
@@ -65,12 +66,13 @@ class TestMediaCompressor:
             subdir.mkdir()
             (subdir / "nested.mp4").touch()
 
-            files = compressor._collect_files()
+            files, skipped = compressor._collect_files()
 
             # Should find files in root and subdir
             file_names = [f.name for f in files]
             assert "video.mp4" in file_names
             assert "nested.mp4" in file_names
+            assert skipped == []
 
     def test_collect_files_only_media_extensions(self, mock_config, temp_dir):
         """Test that only media file extensions are collected."""
@@ -90,10 +92,11 @@ class TestMediaCompressor:
             (temp_dir / "document.pdf").touch()  # Should be ignored
             (temp_dir / "text.txt").touch()  # Should be ignored
 
-            files = compressor._collect_files()
+            files, skipped = compressor._collect_files()
 
             # Should only have media files
             assert len(files) == 9
+            assert skipped == []
             extensions = {f.suffix.lower() for f in files}
             assert ".pdf" not in extensions
             assert ".txt" not in extensions
@@ -787,9 +790,10 @@ class TestMediaCompressor:
         (temp_dir / "within.mp4").write_bytes(b"0" * 1000)
         (temp_dir / "large.mp4").write_bytes(b"0" * 3000)
 
-        files = compressor._collect_files()
+        files, skipped = compressor._collect_files()
 
         assert {f.name for f in files} == {"within.mp4"}
+        assert {f.name for f in skipped} == {"small.mp4", "large.mp4"}
 
     def test_resolve_paths_uses_output_dir(self, temp_dir):
         """Test _resolve_paths respects a custom output directory."""
@@ -826,7 +830,7 @@ class TestMediaCompressor:
         dummy_file.write_bytes(b"0" * 100)
 
         with (
-            patch.object(compressor, "_collect_files", return_value=[dummy_file]),
+            patch.object(compressor, "_collect_files", return_value=([dummy_file], [])),
             patch.object(compressor, "_process_file") as mock_process,
         ):
             compressor.compress()
@@ -851,9 +855,10 @@ class TestMediaCompressor:
             return original_stat(self, *args, **kwargs)
 
         with patch.object(Path, "stat", mock_stat):
-            files = compressor._collect_files()
+            files, skipped = compressor._collect_files()
 
         assert files == []
+        assert skipped == []
 
     def test_collect_files_excludes_compressed_directory(self, temp_dir):
         """Test _collect_files excludes files in the compressed directory."""
@@ -881,7 +886,7 @@ class TestMediaCompressor:
         compressed_subdir.mkdir()
         (compressed_subdir / "nested_compressed.mp4").touch()
 
-        files = compressor._collect_files(compressed_dir)
+        files, skipped = compressor._collect_files(compressed_dir)
 
         # Should find files in root and subdir, but NOT in compressed directory
         file_names = {f.name for f in files}
@@ -891,6 +896,7 @@ class TestMediaCompressor:
         assert "compressed1.mp4" not in file_names
         assert "compressed2.mp4" not in file_names
         assert "nested_compressed.mp4" not in file_names
+        assert skipped == []
 
     def test_collect_files_excludes_custom_output_directory(self, temp_dir):
         """Test _collect_files excludes files in custom output directory."""
@@ -906,12 +912,13 @@ class TestMediaCompressor:
         custom_output.mkdir()
         (custom_output / "output1.mp4").touch()
 
-        files = compressor._collect_files(custom_output)
+        files, skipped = compressor._collect_files(custom_output)
 
         # Should find files in source, but NOT in custom output directory
         file_names = {f.name for f in files}
         assert "video1.mp4" in file_names
         assert "output1.mp4" not in file_names
+        assert skipped == []
 
     def test_collect_files_no_exclusion_in_overwrite_mode(self, temp_dir):
         """Test _collect_files does not exclude when overwrite mode is enabled."""
@@ -927,12 +934,13 @@ class TestMediaCompressor:
         compressed_dir.mkdir()
         (compressed_dir / "compressed1.mp4").touch()
 
-        files = compressor._collect_files(compressed_dir)
+        files, skipped = compressor._collect_files(compressed_dir)
 
         # Should find all files including those in compressed directory
         file_names = {f.name for f in files}
         assert "video1.mp4" in file_names
         assert "compressed1.mp4" in file_names
+        assert skipped == []
 
     def test_exclude_compressed_folder_files_excludes_compressed_only(self, temp_dir):
         """Test that files in compressed folder are excluded, but source files go through processing."""
@@ -951,12 +959,13 @@ class TestMediaCompressor:
         compressed_file.write_bytes(b"0" * (50 * 1024 * 1024))
 
         # Collect files - compressed file should be excluded, source file should be included
-        files = compressor._collect_files(compressed_dir)
+        files, skipped = compressor._collect_files(compressed_dir)
 
         # Source file should be in files (will be processed/skipped later)
         # Compressed file should be excluded
         assert source_file in files
         assert compressed_file not in files
+        assert skipped == []
 
         # At this point, no stats should be tracked yet (stats tracked during processing)
         stats = compressor.stats.get_stats()
@@ -1098,9 +1107,10 @@ class TestMediaCompressor:
             compressor = MediaCompressor(mock_config)
 
         files = [temp_dir / "file1.mp4", temp_dir / "file2.mp4"]
-        result = compressor._apply_size_filters(files)
+        kept, skipped = compressor._apply_size_filters(files)
 
-        assert result == files
+        assert kept == files
+        assert skipped == []
 
     def test_apply_size_filters_min_size(self, mock_config, temp_dir):
         """Test _apply_size_filters with min_size filter."""
@@ -1112,11 +1122,10 @@ class TestMediaCompressor:
         (temp_dir / "large.mp4").write_bytes(b"0" * 1000)
 
         files = list(temp_dir.glob("*.mp4"))
-        result = compressor._apply_size_filters(files)
+        kept, skipped = compressor._apply_size_filters(files)
 
-        file_names = {f.name for f in result}
-        assert "small.mp4" not in file_names
-        assert "large.mp4" in file_names
+        assert {f.name for f in kept} == {"large.mp4"}
+        assert {f.name for f in skipped} == {"small.mp4"}
 
     def test_apply_size_filters_max_size(self, mock_config, temp_dir):
         """Test _apply_size_filters with max_size filter."""
@@ -1128,11 +1137,10 @@ class TestMediaCompressor:
         (temp_dir / "large.mp4").write_bytes(b"0" * 1000)
 
         files = list(temp_dir.glob("*.mp4"))
-        result = compressor._apply_size_filters(files)
+        kept, skipped = compressor._apply_size_filters(files)
 
-        file_names = {f.name for f in result}
-        assert "small.mp4" in file_names
-        assert "large.mp4" not in file_names
+        assert {f.name for f in kept} == {"small.mp4"}
+        assert {f.name for f in skipped} == {"large.mp4"}
 
     def test_apply_size_filters_both_min_max(self, mock_config, temp_dir):
         """Test _apply_size_filters with both min and max size filters."""
@@ -1145,12 +1153,10 @@ class TestMediaCompressor:
         (temp_dir / "large.mp4").write_bytes(b"0" * 3000)
 
         files = list(temp_dir.glob("*.mp4"))
-        result = compressor._apply_size_filters(files)
+        kept, skipped = compressor._apply_size_filters(files)
 
-        file_names = {f.name for f in result}
-        assert "small.mp4" not in file_names
-        assert "within.mp4" in file_names
-        assert "large.mp4" not in file_names
+        assert {f.name for f in kept} == {"within.mp4"}
+        assert {f.name for f in skipped} == {"small.mp4", "large.mp4"}
 
     def test_initialization_passes_priority_to_executor(self, temp_dir):
         """MediaCompressor forwards process/io priority to the FFmpegExecutor."""
@@ -1237,7 +1243,7 @@ class TestMediaCompressor:
             f.write_bytes(b"0" * 10)
 
         with (
-            patch.object(compressor, "_collect_files", return_value=files),
+            patch.object(compressor, "_collect_files", return_value=(files, [])),
             patch.object(compressor, "_process_file"),
             patch.object(compressor, "_apply_cooldown") as mock_cooldown,
         ):
@@ -1270,8 +1276,170 @@ class TestMediaCompressor:
             return original_stat(self, *args, **kwargs)
 
         with patch.object(Path, "stat", mock_stat):
-            result = compressor._apply_size_filters(files)
+            kept, skipped = compressor._apply_size_filters(files)
 
         # Should only include the good file (error_file is skipped due to stat error)
-        assert len(result) == 1
-        assert result[0].name == "good.mp4"
+        assert len(kept) == 1
+        assert kept[0].name == "good.mp4"
+        assert skipped == []
+
+    def test_copy_skipped_files_copies_to_output(self, temp_dir):
+        """Size-filtered files are copied into the output directory when the flag is on."""
+        config = CompressionConfig(
+            source_folder=temp_dir,
+            min_size=500,
+            copy_skipped_files=True,
+        )
+        with patch("compressy.core.media_compressor.FFmpegExecutor"):
+            compressor = MediaCompressor(config)
+
+        small = temp_dir / "small.mp4"
+        within = temp_dir / "within.mp4"
+        small.write_bytes(b"S" * 400)
+        within.write_bytes(b"W" * 1000)
+
+        with patch.object(compressor, "_process_file") as mock_process:
+            stats = compressor.compress()
+
+        out_small = temp_dir / "compressed" / "small.mp4"
+        assert out_small.exists()
+        assert out_small.read_bytes() == b"S" * 400
+        assert not (temp_dir / "compressed" / "within.mp4").exists()
+        mock_process.assert_called_once()
+        assert mock_process.call_args[0][0] == within
+        assert stats["skipped"] == 1
+        assert stats["total_files"] == 2
+
+    def test_copy_skipped_files_flag_off_does_not_copy(self, temp_dir):
+        """Without the flag, size-filtered files are not copied."""
+        config = CompressionConfig(source_folder=temp_dir, min_size=500)
+        with patch("compressy.core.media_compressor.FFmpegExecutor"):
+            compressor = MediaCompressor(config)
+
+        (temp_dir / "small.mp4").write_bytes(b"S" * 400)
+        (temp_dir / "within.mp4").write_bytes(b"W" * 1000)
+
+        with patch.object(compressor, "_process_file"):
+            compressor.compress()
+
+        assert not (temp_dir / "compressed" / "small.mp4").exists()
+
+    def test_copy_skipped_files_all_filtered_still_copies(self, temp_dir):
+        """When every file is size-filtered, copies still happen before early return."""
+        config = CompressionConfig(
+            source_folder=temp_dir,
+            min_size=5000,
+            copy_skipped_files=True,
+        )
+        with patch("compressy.core.media_compressor.FFmpegExecutor"):
+            compressor = MediaCompressor(config)
+
+        (temp_dir / "tiny.mp4").write_bytes(b"T" * 100)
+        (temp_dir / "small.jpg").write_bytes(b"J" * 200)
+
+        with patch.object(compressor, "_process_file") as mock_process:
+            stats = compressor.compress()
+
+        mock_process.assert_not_called()
+        assert (temp_dir / "compressed" / "tiny.mp4").exists()
+        assert (temp_dir / "compressed" / "small.jpg").exists()
+        assert stats["skipped"] == 2
+        assert stats["total_files"] == 2
+
+    def test_copy_skipped_files_overwrite_is_noop(self, temp_dir):
+        """With --overwrite there is no output tree, so the flag is a no-op."""
+        config = CompressionConfig(
+            source_folder=temp_dir,
+            min_size=500,
+            copy_skipped_files=True,
+            overwrite=True,
+        )
+        with patch("compressy.core.media_compressor.FFmpegExecutor"):
+            compressor = MediaCompressor(config)
+
+        (temp_dir / "small.mp4").write_bytes(b"S" * 400)
+        (temp_dir / "within.mp4").write_bytes(b"W" * 1000)
+
+        with (
+            patch.object(compressor, "_process_file"),
+            patch.object(compressor, "_copy_skipped_files") as mock_copy,
+        ):
+            compressor.compress()
+
+        mock_copy.assert_not_called()
+        assert not (temp_dir / "compressed").exists()
+
+    def test_copy_skipped_files_existing_dest_left_alone(self, temp_dir):
+        """If the destination already exists, do not overwrite it."""
+        config = CompressionConfig(
+            source_folder=temp_dir,
+            min_size=500,
+            copy_skipped_files=True,
+        )
+        with patch("compressy.core.media_compressor.FFmpegExecutor"):
+            compressor = MediaCompressor(config)
+
+        small = temp_dir / "small.mp4"
+        small.write_bytes(b"NEW" * 100)
+        compressed = temp_dir / "compressed"
+        compressed.mkdir()
+        existing = compressed / "small.mp4"
+        existing.write_bytes(b"OLDCONTENT")
+
+        with patch.object(compressor, "_process_file"):
+            stats = compressor.compress()
+
+        assert existing.read_bytes() == b"OLDCONTENT"
+        assert stats["skipped"] == 1
+
+    def test_copy_skipped_files_preserve_timestamps_uses_copy2(self, temp_dir):
+        """preserve_timestamps uses shutil.copy2 for size-filtered copies."""
+        config = CompressionConfig(
+            source_folder=temp_dir,
+            min_size=500,
+            copy_skipped_files=True,
+            preserve_timestamps=True,
+        )
+        with patch("compressy.core.media_compressor.FFmpegExecutor"):
+            compressor = MediaCompressor(config)
+
+        (temp_dir / "small.mp4").write_bytes(b"S" * 400)
+
+        with (
+            patch.object(compressor, "_process_file"),
+            patch("compressy.core.media_compressor.shutil.copy2") as mock_copy2,
+            patch("compressy.core.media_compressor.shutil.copy") as mock_copy,
+            patch.object(compressor.file_processor, "preserve_timestamps") as mock_preserve,
+        ):
+            compressor.compress()
+
+        mock_copy2.assert_called_once()
+        mock_copy.assert_not_called()
+        mock_preserve.assert_called_once()
+
+    def test_copy_skipped_files_handles_copy_error(self, temp_dir):
+        """Copy failures for size-filtered files are recorded as errors."""
+        config = CompressionConfig(
+            source_folder=temp_dir,
+            min_size=500,
+            copy_skipped_files=True,
+        )
+        with patch("compressy.core.media_compressor.FFmpegExecutor"):
+            compressor = MediaCompressor(config)
+
+        small = temp_dir / "small.mp4"
+        small.write_bytes(b"S" * 400)
+
+        with (
+            patch.object(compressor, "_process_file"),
+            patch.object(
+                compressor,
+                "_copy_one_skipped_file",
+                side_effect=OSError("disk full"),
+            ),
+        ):
+            stats = compressor.compress()
+
+        assert stats["errors"] == 1
+        assert stats["skipped"] == 0
+        assert stats["total_files"] == 1
