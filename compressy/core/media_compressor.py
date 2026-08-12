@@ -97,9 +97,7 @@ class MediaCompressor:
         if not all_files:
             if skipped_handled:
                 self.stats.stats["total_files"] = skipped_handled
-                self.logger.info(
-                    f"No media files to compress; copied {skipped_handled} size-filtered file(s)"
-                )
+                self.logger.info(f"No media files to compress; copied {skipped_handled} size-filtered file(s)")
                 print(f"No media files to compress; copied {skipped_handled} size-filtered file(s).")
             else:
                 self.logger.info("No media files found to compress")
@@ -141,9 +139,7 @@ class MediaCompressor:
         self.logger.debug(f"Cooling down for {cooldown}s before next file")
         time.sleep(cooldown)
 
-    def _collect_files(
-        self, compressed_folder: Optional[Path] = None
-    ) -> Tuple[List[Path], List[Path]]:
+    def _collect_files(self, compressed_folder: Optional[Path] = None) -> Tuple[List[Path], List[Path]]:
         """
         Collect files to process based on recursive setting and size filters.
 
@@ -288,9 +284,7 @@ class MediaCompressor:
                 except OSError:
                     original_size = 0
                 self.stats.add_total_file_size(original_size, folder_key)
-                self.stats.update_stats(
-                    original_size, 0, 0, "error", folder_key, file_type, file_extension
-                )
+                self.stats.update_stats(original_size, 0, 0, "error", folder_key, file_type, file_extension)
                 handled += 1
         return handled
 
@@ -331,9 +325,7 @@ class MediaCompressor:
             file_extension,
         )
         self.stats.add_file_info(file_info, folder_key)
-        self.stats.update_stats(
-            original_size, original_size, 0, "skipped", folder_key, file_type, file_extension
-        )
+        self.stats.update_stats(original_size, original_size, 0, "skipped", folder_key, file_type, file_extension)
         return 1
 
     def _get_folder_key(self, file_path: Path) -> str:

@@ -298,9 +298,7 @@ class TestCompressyMain:
     @patch("compressy.py.MediaCompressor")
     @patch("compressy.py.CompressionConfig")
     @patch("sys.argv")
-    def test_main_with_copy_skipped_files(
-        self, mock_argv, mock_config_class, mock_compressor_class, temp_dir, capsys
-    ):
+    def test_main_with_copy_skipped_files(self, mock_argv, mock_config_class, mock_compressor_class, temp_dir, capsys):
         """Test main() wires --copy-skipped-files into config and cmd_args."""
         mock_argv.__getitem__.side_effect = lambda i: [
             "compressy.py",
