@@ -114,6 +114,7 @@ class CompressionConfig:
     preserve_timestamps: bool = False
     min_size: Optional[int] = None
     max_size: Optional[int] = None
+    copy_skipped_files: bool = False
     output_dir: Optional[Path] = None
     video_resolution: Optional[str] = None
     auto_rename_duplicates: bool = True

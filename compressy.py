@@ -152,6 +152,11 @@ def main():
         help="Maximum file size to process (e.g., '100MB', '1GB', '2.5GB')"
     )
     parser.add_argument(
+        "--copy-skipped-files",
+        action="store_true",
+        help="Copy files excluded by --min-size/--max-size into the output directory unchanged"
+    )
+    parser.add_argument(
         "-d", "--output-dir",
         type=str,
         default=None,
@@ -300,6 +305,7 @@ def main():
             auto_rename_duplicates=args.auto_rename_duplicates,
             min_size=min_size,
             max_size=max_size,
+            copy_skipped_files=args.copy_skipped_files,
             output_dir=Path(args.output_dir) if args.output_dir else None,
             video_resolution=args.video_resolution,
             ffmpeg_threads=args.ffmpeg_threads,
@@ -339,6 +345,8 @@ def main():
             cmd_args['min_size'] = args.min_size
         if args.max_size:
             cmd_args['max_size'] = args.max_size
+        if args.copy_skipped_files:
+            cmd_args['copy_skipped_files'] = True
         if args.output_dir:
             cmd_args['output_dir'] = args.output_dir
         if args.video_resolution:
